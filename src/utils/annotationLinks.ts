@@ -1,5 +1,6 @@
 import type { SheetAnnotation } from '../types/annotation'
 import { VIEWBOX_WIDTH } from './annotation'
+import { roundNorm } from './annotationTransform'
 
 export type LinkMarkerStyle = 'box' | 'circle'
 
@@ -7,6 +8,19 @@ export interface LinkCircleGeometry {
 	cx: number
 	cy: number
 	r: number
+}
+
+export function getLinkStyle(item: Pick<SheetAnnotation, 'data'>): LinkMarkerStyle {
+	return item.data?.linkStyle === 'circle' ? 'circle' : 'box'
+}
+
+export function getLinkCenter(item: Pick<SheetAnnotation, 'x' | 'y' | 'width' | 'height'>): { x: number; y: number } {
+	const w = item.width || 0.1
+	const h = item.height || 0.06
+	return {
+		x: Math.min(1, Math.max(0, item.x + w / 2)),
+		y: Math.min(1, Math.max(0, item.y + h / 2)),
+	}
 }
 
 /**
@@ -131,10 +145,6 @@ export interface BuildLinkDraftInput {
 	layerIndex?: number
 }
 
-function roundCoord(v: number): number {
-	return Math.round(v * 10000) / 10000
-}
-
 /**
  * Resolve a display label for a link annotation.
  * Box links default to "→ p. N" when empty; circle links remain unlabeled unless text is given.
@@ -157,10 +167,10 @@ export function buildLinkAnnotationDraft(input: BuildLinkDraftInput): LinkAnnota
 		pageNumber: Math.max(0, input.sourcePageIndex),
 		layerIndex: input.layerIndex ?? 0,
 		type: 'link',
-		x: roundCoord(input.x),
-		y: roundCoord(input.y),
-		width: roundCoord(input.width),
-		height: roundCoord(input.height),
+		x: roundNorm(input.x),
+		y: roundNorm(input.y),
+		width: roundNorm(input.width),
+		height: roundNorm(input.height),
 		style: {
 			color: input.color || DEFAULT_LINK_COLOR,
 			opacity: 1,
@@ -170,7 +180,7 @@ export function buildLinkAnnotationDraft(input: BuildLinkDraftInput): LinkAnnota
 			targetPage: Math.max(0, input.targetPageIndex),
 			label: resolveLinkLabel(input.label, input.targetPageIndex, linkStyle),
 			...(linkStyle === 'circle' ? { linkStyle } : {}),
-			...(tx !== undefined && ty !== undefined ? { targetX: roundCoord(tx), targetY: roundCoord(ty) } : {}),
+			...(tx !== undefined && ty !== undefined ? { targetX: roundNorm(tx), targetY: roundNorm(ty) } : {}),
 		},
 	}
 }
@@ -190,23 +200,22 @@ export function buildReverseLinkDraft(forward: LinkAnnotationDraft): LinkAnnotat
 	const destCenterY = clampNormalizedCoord(forward.data?.targetY) ?? 0.14
 	const revX = Math.min(Math.max(0, destCenterX - w / 2), Math.max(0, 1 - w))
 	const revY = Math.min(Math.max(0, destCenterY - h / 2), Math.max(0, 1 - h))
-	const linkStyle: LinkMarkerStyle = forward.data?.linkStyle === 'circle' ? 'circle' : 'box'
-	const sourceCenterX = Math.min(1, Math.max(0, forward.x + w / 2))
-	const sourceCenterY = Math.min(1, Math.max(0, forward.y + h / 2))
+	const linkStyle = getLinkStyle(forward)
+	const sourceCenter = getLinkCenter(forward)
 
 	return {
 		pageNumber: targetPage,
 		layerIndex: forward.layerIndex ?? 0,
 		type: 'link',
-		x: roundCoord(revX),
-		y: roundCoord(revY),
+		x: roundNorm(revX),
+		y: roundNorm(revY),
 		width: w,
 		height: h,
 		style: { ...forward.style },
 		data: {
 			targetPage: forward.pageNumber,
-			targetX: roundCoord(sourceCenterX),
-			targetY: roundCoord(sourceCenterY),
+			targetX: roundNorm(sourceCenter.x),
+			targetY: roundNorm(sourceCenter.y),
 			label: linkStyle === 'circle' ? '' : `← p. ${forward.pageNumber + 1}`,
 			linkStyle,
 		},

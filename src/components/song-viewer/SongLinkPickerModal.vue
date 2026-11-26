@@ -3,8 +3,6 @@ import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
-import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import type { Bookmark } from '../../types/song'
 import {
@@ -14,7 +12,8 @@ import {
 } from '../../utils/annotationLinks'
 import { fetchCachedBinaryFile } from '../../utils/file-binary'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
-import { destroyPdfJsDocument, loadPdfJsDocument, renderPdfPageToCanvas } from '../../utils/pdfjs'
+import { destroyPdfJsDocument, loadPdfJsDocument } from '../../utils/pdfjs'
+import SongLinkPickerPane from './SongLinkPickerPane.vue'
 
 export interface SideBySideLinkResult {
 	sourcePageIndex: number
@@ -72,50 +71,22 @@ const label = ref('')
 const linkStyle = ref<LinkMarkerStyle>('box')
 const createReverse = ref(false)
 
-const sourceCanvasRef = ref<HTMLCanvasElement | null>(null)
-const targetCanvasRef = ref<HTMLCanvasElement | null>(null)
 const pdfDoc = shallowRef<PDFDocumentProxy | null>(null)
 const effectiveTotalPages = computed(() => Math.max(1, pdfDoc.value?.numPages ?? props.totalPages))
 const previewSourceLabel = computed(() => resolveLinkLabel(label.value, targetPageIdx.value, linkStyle.value))
+const previewReverseStyle = computed<LinkMarkerStyle>(() =>
+	createReverse.value && linkStyle.value === 'box' ? 'box' : 'circle',
+)
 const previewReverseLabel = computed(() =>
 	createReverse.value && linkStyle.value === 'box' ? `← p. ${sourcePageIdx.value + 1}` : '',
 )
 
-async function renderPane(canvas: HTMLCanvasElement | null, pageIdx: number) {
-	const doc = pdfDoc.value
-	if (!doc || !canvas) return
-	const clampedPage = Math.min(Math.max(1, pageIdx + 1), doc.numPages)
-	try {
-		const page = await doc.getPage(clampedPage)
-		const baseVp = page.getViewport({ scale: 1 })
-		const targetWidth = 360
-		const scale = targetWidth / Math.max(1, baseVp.width)
-		const vp = page.getViewport({ scale })
-		canvas.style.width = `${Math.round(vp.width)}px`
-		canvas.style.height = `${Math.round(vp.height)}px`
-		await renderPdfPageToCanvas(page, canvas, vp, { dpr: Math.min(window.devicePixelRatio || 1, 2) })
-	} catch {
-		// Ignore transient PDF render errors in picker
-	}
-}
-
 async function ensurePdfLoaded() {
-	if (!props.filePath) return
-	if (pdfDoc.value) {
-		await Promise.all([
-			renderPane(sourceCanvasRef.value, sourcePageIdx.value),
-			renderPane(targetCanvasRef.value, targetPageIdx.value),
-		])
-		return
-	}
+	if (!props.filePath || pdfDoc.value) return
 	try {
 		const bytes = await fetchCachedBinaryFile(props.filePath, defaultFileBinaryCache)
 		if (!bytes) return
 		pdfDoc.value = await loadPdfJsDocument(bytes.slice())
-		await Promise.all([
-			renderPane(sourceCanvasRef.value, sourcePageIdx.value),
-			renderPane(targetCanvasRef.value, targetPageIdx.value),
-		])
 	} catch {
 		// Fallback to blank clickable canvases if PDF fails to load
 	}
@@ -139,14 +110,6 @@ watch(
 	{ immediate: true },
 )
 
-watch(sourcePageIdx, (idx) => {
-	if (props.open) void renderPane(sourceCanvasRef.value, idx)
-})
-
-watch(targetPageIdx, (idx) => {
-	if (props.open) void renderPane(targetCanvasRef.value, idx)
-})
-
 onUnmounted(() => {
 	if (pdfDoc.value) {
 		void destroyPdfJsDocument(pdfDoc.value)
@@ -154,27 +117,7 @@ onUnmounted(() => {
 	}
 })
 
-function onPaneClick(which: 'source' | 'target', event: MouseEvent) {
-	const el = event.currentTarget as HTMLElement | null
-	if (!el) return
-	const rect = el.getBoundingClientRect()
-	if (rect.width <= 0 || rect.height <= 0) return
-	const nx = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-	const ny = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
-	if (which === 'source') {
-		sourceX.value = nx
-		sourceY.value = ny
-	} else {
-		targetX.value = nx
-		targetY.value = ny
-	}
-}
-
-function applyBookmark(event: Event) {
-	const val = (event.target as HTMLSelectElement).value
-	if (!val) return
-	const bm = props.bookmarks[Number.parseInt(val, 10)]
-	if (!bm) return
+function applyBookmark(bm: Bookmark) {
 	targetPageIdx.value = Math.max(0, Math.min(effectiveTotalPages.value - 1, bm.pageNum - 1))
 	if (!label.value.trim()) {
 		label.value = bm.name
@@ -222,105 +165,31 @@ function handleSave() {
 				</header>
 
 				<div :class="$style.panes">
-					<!-- Source Page Pane -->
-					<section :class="$style.pane" data-test="link-picker-source-pane">
-						<div :class="$style.paneBar">
-							<span :class="$style.paneBadgeSource">{{ t('sheetmusic', 'Source') }}</span>
-							<div :class="$style.pager">
-								<button
-									type="button"
-									:class="$style.pageBtn"
-									:disabled="sourcePageIdx <= 0"
-									:aria-label="t('sheetmusic', 'Previous source page')"
-									data-test="link-picker-source-prev"
-									@click="sourcePageIdx = Math.max(0, sourcePageIdx - 1)">
-									<ChevronLeftIcon :size="18" />
-								</button>
-								<span data-test="link-picker-source-page">
-									{{ t('sheetmusic', 'Page {page} / {total}', { page: sourcePageIdx + 1, total: effectiveTotalPages }) }}
-								</span>
-								<button
-									type="button"
-									:class="$style.pageBtn"
-									:disabled="sourcePageIdx >= effectiveTotalPages - 1"
-									:aria-label="t('sheetmusic', 'Next source page')"
-									data-test="link-picker-source-next"
-									@click="sourcePageIdx = Math.min(effectiveTotalPages - 1, sourcePageIdx + 1)">
-									<ChevronRightIcon :size="18" />
-								</button>
-							</div>
-						</div>
-						<div
-							:class="$style.canvasWrap"
-							data-test="link-picker-source-surface"
-							@click="onPaneClick('source', $event)">
-							<canvas ref="sourceCanvasRef" :class="$style.canvas" width="360" height="480" />
-							<span
-								:class="[$style.sourcePin, linkStyle === 'box' ? $style.pinBox : $style.pinCircle]"
-								:style="{ left: `${sourceX * 100}%`, top: `${sourceY * 100}%` }"
-								:data-pin-style="linkStyle"
-								data-test="link-picker-source-pin">
-								{{ previewSourceLabel }}
-							</span>
-						</div>
-					</section>
+					<SongLinkPickerPane
+						role="source"
+						:pdf-doc="pdfDoc"
+						:page-index="sourcePageIdx"
+						:total-pages="effectiveTotalPages"
+						:pin-x="sourceX"
+						:pin-y="sourceY"
+						:pin-style="linkStyle"
+						:pin-label="previewSourceLabel"
+						@update:page-index="sourcePageIdx = $event"
+						@pick-point="sourceX = $event.x; sourceY = $event.y" />
 
-					<!-- Target Page Pane -->
-					<section :class="$style.pane" data-test="link-picker-target-pane">
-						<div :class="$style.paneBar">
-							<span :class="$style.paneBadgeTarget">{{ t('sheetmusic', 'Target') }}</span>
-							<div :class="$style.pager">
-								<button
-									type="button"
-									:class="$style.pageBtn"
-									:disabled="targetPageIdx <= 0"
-									:aria-label="t('sheetmusic', 'Previous target page')"
-									data-test="link-picker-target-prev"
-									@click="targetPageIdx = Math.max(0, targetPageIdx - 1)">
-									<ChevronLeftIcon :size="18" />
-								</button>
-								<span data-test="link-picker-target-page">
-									{{ t('sheetmusic', 'Page {page} / {total}', { page: targetPageIdx + 1, total: effectiveTotalPages }) }}
-								</span>
-								<button
-									type="button"
-									:class="$style.pageBtn"
-									:disabled="targetPageIdx >= effectiveTotalPages - 1"
-									:aria-label="t('sheetmusic', 'Next target page')"
-									data-test="link-picker-target-next"
-									@click="targetPageIdx = Math.min(effectiveTotalPages - 1, targetPageIdx + 1)">
-									<ChevronRightIcon :size="18" />
-								</button>
-							</div>
-							<select
-								v-if="bookmarks.length > 0"
-								:class="$style.bmSelect"
-								:aria-label="t('sheetmusic', 'Jump target to bookmark')"
-								data-test="link-picker-bookmark-select"
-								@change="applyBookmark">
-								<option value="">{{ t('sheetmusic', 'Bookmark…') }}</option>
-								<option
-									v-for="(bm, idx) in bookmarks"
-									:key="`${bm.name}-${idx}`"
-									:value="String(idx)">
-									{{ bm.name }} (p. {{ bm.pageNum }})
-								</option>
-							</select>
-						</div>
-						<div
-							:class="$style.canvasWrap"
-							data-test="link-picker-target-surface"
-							@click="onPaneClick('target', $event)">
-							<canvas ref="targetCanvasRef" :class="$style.canvas" width="360" height="480" />
-							<span
-								:class="[$style.targetPin, createReverse && linkStyle === 'box' ? $style.pinBox : $style.pinCircle]"
-								:style="{ left: `${targetX * 100}%`, top: `${targetY * 100}%` }"
-								:data-pin-style="createReverse && linkStyle === 'box' ? 'box' : 'circle'"
-								data-test="link-picker-target-pin">
-								{{ previewReverseLabel }}
-							</span>
-						</div>
-					</section>
+					<SongLinkPickerPane
+						role="target"
+						:pdf-doc="pdfDoc"
+						:page-index="targetPageIdx"
+						:total-pages="effectiveTotalPages"
+						:pin-x="targetX"
+						:pin-y="targetY"
+						:pin-style="previewReverseStyle"
+						:pin-label="previewReverseLabel"
+						:bookmarks="bookmarks"
+						@update:page-index="targetPageIdx = $event"
+						@pick-point="targetX = $event.x; targetY = $event.y"
+						@select-bookmark="applyBookmark" />
 				</div>
 
 				<footer :class="$style.footer">
@@ -436,127 +305,6 @@ button[type='button'].closeBtn {
 	padding: 12px;
 	overflow-y: auto;
 	background: var(--color-background-hover);
-}
-
-.pane {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 8px;
-}
-
-.paneBar {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-wrap: wrap;
-	gap: 8px;
-	width: 100%;
-	font-size: 0.82rem;
-}
-
-.paneBadgeSource,
-.paneBadgeTarget {
-	padding: 2px 8px;
-	border-radius: 999px;
-	font-size: 0.75rem;
-	font-weight: 700;
-	color: #ffffff;
-}
-
-.paneBadgeSource {
-	background: #0082c9;
-}
-
-.paneBadgeTarget {
-	background: #e65100;
-}
-
-.pager {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-}
-
-button[type='button'].pageBtn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	margin: 0;
-	padding: 2px 4px;
-	min-height: 26px;
-	border: 1px solid var(--color-border);
-	border-radius: 4px;
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	cursor: pointer;
-}
-
-.bmSelect {
-	height: 26px;
-	font-size: 0.78rem;
-	border: 1px solid var(--color-border);
-	border-radius: 4px;
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-}
-
-.canvasWrap {
-	position: relative;
-	display: inline-block;
-	border: 1px solid var(--color-border-dark, var(--color-border));
-	background: #ffffff;
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
-	cursor: crosshair;
-	line-height: 0;
-}
-
-.canvas {
-	display: block;
-	max-width: 100%;
-	height: auto;
-}
-
-.sourcePin,
-.targetPin {
-	position: absolute;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	transform: translate(-50%, -50%);
-	pointer-events: none;
-	box-sizing: border-box;
-	font-size: 10px;
-	font-weight: 700;
-	line-height: 1;
-	white-space: nowrap;
-	transition: border-radius 0.12s ease, padding 0.12s ease;
-}
-
-.pinCircle {
-	min-width: 22px;
-	height: 22px;
-	padding: 0 4px;
-	border-radius: 999px;
-}
-
-.pinBox {
-	min-width: 44px;
-	height: 22px;
-	padding: 0 6px;
-	border-radius: 4px;
-}
-
-.sourcePin {
-	border: 2px solid #0082c9;
-	background: rgba(0, 130, 201, 0.22);
-	color: #0052cc;
-}
-
-.targetPin {
-	border: 2px solid #e65100;
-	background: rgba(230, 81, 0, 0.22);
-	color: #bf360c;
 }
 
 .footer {

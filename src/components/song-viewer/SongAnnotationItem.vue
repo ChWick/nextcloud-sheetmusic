@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
-import { getLinkCircleGeometry, resolveLinkColors, type LinkJumpPayload } from '../../utils/annotationLinks'
+import { getLinkCircleGeometry, getLinkStyle, resolveLinkColors, type LinkJumpPayload } from '../../utils/annotationLinks'
 import { computed } from 'vue'
 import {
 	getAnnotationDashArray,
@@ -39,7 +39,7 @@ const linkColors = computed(() =>
 	props.item.type === 'link' ? resolveLinkColors(props.item.style?.color) : null,
 )
 const linkCircle = computed(() =>
-	props.item.type === 'link' && props.item.data?.linkStyle === 'circle'
+	props.item.type === 'link' && getLinkStyle(props.item) === 'circle'
 		? getLinkCircleGeometry(props.item, props.vbHeight)
 		: null,
 )

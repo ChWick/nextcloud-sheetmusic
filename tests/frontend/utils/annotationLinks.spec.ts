@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+	buildLinkDrafts,
 	buildReverseLinkDraft,
 	clampNormalizedCoord,
+	getLinkCenter,
+	getLinkCircleGeometry,
+	getLinkStyle,
 	LINK_LABEL_PRESETS,
 	resolveLinkColors,
+	resolveLinkLabel,
 } from '../../../src/utils/annotationLinks'
 
 describe('annotationLinks', () => {
@@ -78,5 +83,42 @@ describe('annotationLinks', () => {
 			style: { opacity: 1 },
 			data: { targetPage: 1, label: 'Repeat' },
 		})).toBeNull()
+	})
+
+	it('resolves link style, center, circle geometry, labels, and paired drafts', () => {
+		expect(getLinkStyle({ data: { linkStyle: 'circle' } })).toBe('circle')
+		expect(getLinkStyle({ data: {} })).toBe('box')
+
+		const center = getLinkCenter({ x: 0.2, y: 0.3, width: 0.1, height: 0.06 })
+		expect(center.x).toBeCloseTo(0.25, 6)
+		expect(center.y).toBeCloseTo(0.33, 6)
+		expect(getLinkCenter({ x: 0.98, y: 0.98, width: 0.1, height: 0.06 })).toEqual({ x: 1, y: 1 })
+
+		const geom = getLinkCircleGeometry({ x: 0.2, y: 0.3, width: 0.1, height: 0.06 }, 1000)
+		expect(geom.cx).toBeCloseTo(250, 5)
+		expect(geom.cy).toBeCloseTo(330, 5)
+		expect(geom.r).toBeCloseTo(30, 5)
+		const minGeom = getLinkCircleGeometry({ x: 0.1, y: 0.1, width: 0.01, height: 0.01 }, 1000)
+		expect(minGeom.r).toBe(14)
+
+		expect(resolveLinkLabel('', 2, 'box')).toBe('→ p. 3')
+		expect(resolveLinkLabel('', 2, 'circle')).toBe('')
+		expect(resolveLinkLabel('  To Coda  ', 2, 'circle')).toBe('To Coda')
+
+		const drafts = buildLinkDrafts({
+			sourcePageIndex: 0,
+			x: 0.2,
+			y: 0.3,
+			width: 0.1,
+			height: 0.06,
+			targetPageIndex: 2,
+			targetX: 0.5,
+			targetY: 0.4,
+			linkStyle: 'box',
+		}, true)
+		expect(drafts).toHaveLength(2)
+		expect(drafts[0].data?.label).toBe('→ p. 3')
+		expect(drafts[1].pageNumber).toBe(2)
+		expect(drafts[1].data?.label).toBe('← p. 1')
 	})
 })

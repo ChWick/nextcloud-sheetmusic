@@ -6,6 +6,8 @@ import type { SideBySideLinkResult } from '../components/song-viewer/SongLinkPic
 import { roundNorm } from '../utils/annotationTransform'
 import {
 	buildLinkDrafts,
+	getLinkCenter,
+	getLinkStyle,
 	resolveLinkLabel,
 	type LinkAnnotationDraft,
 	type LinkTargetPickRequest,
@@ -50,15 +52,16 @@ export function useLinkTargetPicking(opts: UseLinkTargetPickingOptions) {
 		const sel = opts.selectedAnnotation.value
 		if (!sel || sel.type !== 'link') return
 		linkTargetPick.value = null
+		const center = getLinkCenter(sel)
 		linkPickerRequest.value = {
 			mode: 'edit',
 			sourcePageIndex: sel.pageNumber,
-			x: sel.x + (sel.width || 0.1) / 2,
-			y: sel.y + (sel.height || 0.06) / 2,
+			x: center.x,
+			y: center.y,
 			width: sel.width || 0.1,
 			height: sel.height || 0.06,
 			label: sel.data?.label ?? '',
-			linkStyle: sel.data?.linkStyle === 'circle' ? 'circle' : 'box',
+			linkStyle: getLinkStyle(sel),
 			existing: sel,
 		}
 	}

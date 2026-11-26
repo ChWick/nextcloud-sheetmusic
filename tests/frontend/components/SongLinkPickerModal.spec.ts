@@ -42,13 +42,20 @@ describe('SongLinkPickerModal', () => {
 		expect(modal!.querySelector('[data-test="link-picker-target-page"]')?.textContent).toContain('Page 4 / 4')
 		expect(sourcePin.textContent?.trim()).toBe('Coda')
 
-		// Choose circle style + reverse link -> source pin switches to circle
-		;(modal!.querySelector('[data-test="link-picker-style-circle"]') as HTMLButtonElement).click()
+		// Enable reverse link while in Box style -> target pin previews reverse box label
 		const revCheckbox = modal!.querySelector('[data-test="link-picker-reverse-checkbox"]') as HTMLInputElement
 		revCheckbox.checked = true
 		revCheckbox.dispatchEvent(new Event('change'))
 		await wrapper.vm.$nextTick()
+		const targetPin = modal!.querySelector('[data-test="link-picker-target-pin"]')!
+		expect(targetPin.getAttribute('data-pin-style')).toBe('box')
+		expect(targetPin.textContent?.trim()).toBe('← p. 1')
+
+		// Choose circle style -> both source and target pins switch to circle
+		;(modal!.querySelector('[data-test="link-picker-style-circle"]') as HTMLButtonElement).click()
+		await wrapper.vm.$nextTick()
 		expect(sourcePin.getAttribute('data-pin-style')).toBe('circle')
+		expect(targetPin.getAttribute('data-pin-style')).toBe('circle')
 
 		;(modal!.querySelector('[data-test="link-picker-save"]') as HTMLButtonElement).click()
 		await wrapper.vm.$nextTick()
@@ -60,6 +67,11 @@ describe('SongLinkPickerModal', () => {
 			linkStyle: 'circle',
 			createReverse: true,
 		})]])
+
+		// Clicking close button emits close
+		;(modal!.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click()
+		await wrapper.vm.$nextTick()
+		expect(wrapper.emitted('close')).toHaveLength(1)
 
 		wrapper.unmount()
 	})

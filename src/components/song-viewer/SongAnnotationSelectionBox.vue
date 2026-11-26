@@ -2,7 +2,7 @@
 import type { SheetAnnotation } from '../../types/annotation'
 import { computed } from 'vue'
 import { getShapeHeightHandle, getStampInkBounds, VIEWBOX_WIDTH } from '../../utils/annotation'
-import { getLinkCircleGeometry } from '../../utils/annotationLinks'
+import { getLinkCircleGeometry, getLinkStyle } from '../../utils/annotationLinks'
 
 const props = withDefaults(defineProps<{
 	item: SheetAnnotation
@@ -37,15 +37,44 @@ const stampBounds = computed(() =>
 	props.item.type === 'stamp' ? getStampInkBounds(props.item, props.vbHeight, scale.value) : null,
 )
 const isLinkCircle = computed(() =>
-	props.item.type === 'link' && props.item.data?.linkStyle === 'circle',
+	props.item.type === 'link' && getLinkStyle(props.item) === 'circle',
 )
 const isLinkBox = computed(() =>
-	props.item.type === 'link' && props.item.data?.linkStyle !== 'circle',
+	props.item.type === 'link' && getLinkStyle(props.item) === 'box',
 )
 const linkCircle = computed(() =>
 	isLinkCircle.value ? getLinkCircleGeometry(props.item, props.vbHeight) : null,
 )
-const linkCircleDiag = computed(() => (linkCircle.value ? linkCircle.value.r * Math.SQRT1_2 : 0))
+const circleLinkHandles = computed(() => {
+	const c = linkCircle.value
+	if (!c) return []
+	const d = c.r * Math.SQRT1_2
+	return [
+		{ id: 'nw', cx: c.cx - d, cy: c.cy - d },
+		{ id: 'ne', cx: c.cx + d, cy: c.cy - d },
+		{ id: 'sw', cx: c.cx - d, cy: c.cy + d },
+		{ id: 'se', cx: c.cx + d, cy: c.cy + d },
+	] as const
+})
+const hasBoxCornerHandles = computed(() =>
+	isLinkBox.value
+	|| (props.item.type !== 'drawing' && props.item.type !== 'highlight' && props.item.type !== 'stamp'),
+)
+const boxCornerHandles = computed(() => {
+	if (!hasBoxCornerHandles.value) return []
+	const pad = isLinkBox.value ? 0 : boxPad.value
+	const half = handleSize.value / 2
+	const left = props.item.x * VIEWBOX_WIDTH - pad - half
+	const right = (props.item.x + props.item.width) * VIEWBOX_WIDTH + pad - half
+	const top = props.item.y * props.vbHeight - pad - half
+	const bottom = (props.item.y + props.item.height) * props.vbHeight + pad - half
+	return [
+		{ id: 'nw', x: left, y: top },
+		{ id: 'ne', x: right, y: top },
+		{ id: 'sw', x: left, y: bottom },
+		{ id: 'se', x: right, y: bottom },
+	] as const
+})
 </script>
 
 <template>
@@ -125,107 +154,30 @@ const linkCircleDiag = computed(() => (linkCircle.value ? linkCircle.value.r * M
 		</template>
 
 		<!-- Perimeter resize handles for circle links -->
-		<template v-else-if="showHandles && linkCircle">
+		<template v-else-if="showHandles && circleLinkHandles.length > 0">
 			<circle
-				:cx="linkCircle.cx - linkCircleDiag"
-				:cy="linkCircle.cy - linkCircleDiag"
+				v-for="h in circleLinkHandles"
+				:key="h.id"
+				:cx="h.cx"
+				:cy="h.cy"
 				:r="handleSize / 2"
 				:stroke-width="handleStrokeWidth"
 				class="sheetmusic-resize-handle"
-				data-resize-handle="nw" />
-			<circle
-				:cx="linkCircle.cx + linkCircleDiag"
-				:cy="linkCircle.cy - linkCircleDiag"
-				:r="handleSize / 2"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="ne" />
-			<circle
-				:cx="linkCircle.cx - linkCircleDiag"
-				:cy="linkCircle.cy + linkCircleDiag"
-				:r="handleSize / 2"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="sw" />
-			<circle
-				:cx="linkCircle.cx + linkCircleDiag"
-				:cy="linkCircle.cy + linkCircleDiag"
-				:r="handleSize / 2"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="se" />
+				:data-resize-handle="h.id" />
 		</template>
 
-		<!-- Corner resize handles for box links (directly on actual box corners) -->
-		<template v-else-if="showHandles && isLinkBox">
+		<!-- Corner resize handles for box links (pad=0) and other resizable box annotations -->
+		<template v-else-if="showHandles && boxCornerHandles.length > 0">
 			<rect
-				:x="item.x * VIEWBOX_WIDTH - handleSize / 2"
-				:y="item.y * vbHeight - handleSize / 2"
+				v-for="h in boxCornerHandles"
+				:key="h.id"
+				:x="h.x"
+				:y="h.y"
 				:width="handleSize"
 				:height="handleSize"
 				:stroke-width="handleStrokeWidth"
 				class="sheetmusic-resize-handle"
-				data-resize-handle="nw" />
-			<rect
-				:x="(item.x + item.width) * VIEWBOX_WIDTH - handleSize / 2"
-				:y="item.y * vbHeight - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="ne" />
-			<rect
-				:x="item.x * VIEWBOX_WIDTH - handleSize / 2"
-				:y="(item.y + item.height) * vbHeight - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="sw" />
-			<rect
-				:x="(item.x + item.width) * VIEWBOX_WIDTH - handleSize / 2"
-				:y="(item.y + item.height) * vbHeight - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="se" />
-		</template>
-
-		<!-- Corner resize handles for other box annotations -->
-		<template v-else-if="showHandles && item.type !== 'drawing' && item.type !== 'highlight' && item.type !== 'stamp'">
-			<rect
-				:x="item.x * VIEWBOX_WIDTH - boxPad - handleSize / 2"
-				:y="item.y * vbHeight - boxPad - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="nw" />
-			<rect
-				:x="(item.x + item.width) * VIEWBOX_WIDTH + boxPad - handleSize / 2"
-				:y="item.y * vbHeight - boxPad - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="ne" />
-			<rect
-				:x="item.x * VIEWBOX_WIDTH - boxPad - handleSize / 2"
-				:y="(item.y + item.height) * vbHeight + boxPad - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="sw" />
-			<rect
-				:x="(item.x + item.width) * VIEWBOX_WIDTH + boxPad - handleSize / 2"
-				:y="(item.y + item.height) * vbHeight + boxPad - handleSize / 2"
-				:width="handleSize"
-				:height="handleSize"
-				:stroke-width="handleStrokeWidth"
-				class="sheetmusic-resize-handle"
-				data-resize-handle="se" />
+				:data-resize-handle="h.id" />
 		</template>
 	</g>
 </template>

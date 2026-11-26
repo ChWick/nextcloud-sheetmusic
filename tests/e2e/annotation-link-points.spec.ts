@@ -115,28 +115,36 @@ test.describe('Interactive Link Points (D.S. / Coda jumps)', () => {
 		await page.locator('[data-test="annotation-link-preset-d-s-"]').click()
 		await expect(page.locator('[data-test="annotation-link-label-input"]')).toHaveValue('D.S.')
 
-		// Open side-by-side picker, choose page 3 target, Circle style, and Create reverse link
+		// Open side-by-side picker, verify Box vs Circle live pin preview, choose page 3 target, Circle style, and Create reverse link
 		await page.locator('[data-test="annotation-link-open-picker"]').click()
 		const picker = page.locator('[data-test="link-picker-modal"]')
 		await expect(picker).toBeVisible()
+		await expect(picker.locator('[data-test="link-picker-source-pin"]')).toHaveAttribute('data-pin-style', 'box')
 		await picker.locator('[data-test="link-picker-target-next"]').click()
 		await expect(picker.locator('[data-test="link-picker-target-page"]')).toContainText('Page 3 / 3')
 		await picker.locator('[data-test="link-picker-style-circle"]').click()
+		await expect(picker.locator('[data-test="link-picker-source-pin"]')).toHaveAttribute('data-pin-style', 'circle')
 		await picker.locator('[data-test="link-picker-reverse-checkbox"]').check()
 		await picker.locator('[data-test="link-picker-save"]').click()
 		await expect(picker).toBeHidden()
 
 		// Verify a circle link was created on page 1 (in addition to the seeded box link) and reverse link on page 3
-		await expect(page.locator('[data-link-style="circle"]').first()).toBeVisible()
+		const circleLink = page.locator('[data-link-style="circle"]').first()
+		await expect(circleLink).toBeVisible()
 
-		// Select the existing link to verify target highlight marker on page 3 and toolbar editing
+		// Select the seeded box link -> shape-hugging box selection outline (no dashed box), target marker, and toolbar editing
 		await page.getByRole('button', { name: /Select/i }).first().click()
-		await page.locator('[data-test="annotation-link"]').first().click()
+		await page.locator('[data-link-style="box"] [data-test="annotation-link"]').first().click()
+		await expect(page.locator('[data-test="selection-link-box"]')).toBeVisible()
 		await expect(page.locator('[data-test="selected-link-target-marker"]')).toBeAttached()
 		await page.locator('[data-test="selected-link-edit-button"]').click()
 		await expect(page.locator('[data-test="selected-link-page-input"]')).toHaveValue('3')
 		await expect(page.locator('[data-test="selected-link-style-circle"]')).toBeVisible()
 		await expect(page.locator('[data-test="selected-link-open-picker"]')).toBeVisible()
+
+		// Select the created circle link -> shape-hugging circle selection outline (no dashed box)
+		await circleLink.locator('[data-test="annotation-link"]').click()
+		await expect(page.locator('[data-test="selection-link-circle"]')).toBeVisible()
 		await page.getByRole('button', { name: 'Done' }).click()
 
 		// 2. Open Performance Mode in single-page layout so page 1 -> page 3 jump is unmistakable

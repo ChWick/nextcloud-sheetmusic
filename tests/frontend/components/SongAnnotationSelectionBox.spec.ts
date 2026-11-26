@@ -139,7 +139,16 @@ describe('SongAnnotationSelectionBox.vue', () => {
 		const circleOutline = circleWrapper.find('[data-test="selection-link-circle"]')
 		expect(circleOutline.exists()).toBe(true)
 		expect(circleOutline.attributes('stroke-dasharray')).toBeUndefined()
-		expect(circleWrapper.findAll('circle[data-resize-handle]')).toHaveLength(4)
+		const circleHandles = circleWrapper.findAll('circle[data-resize-handle]')
+		expect(circleHandles).toHaveLength(4)
+		// Each circle handle lies on the circle perimeter (distance from center === r)
+		const cx = Number(circleOutline.attributes('cx'))
+		const cy = Number(circleOutline.attributes('cy'))
+		const r = Number(circleOutline.attributes('r'))
+		for (const h of circleHandles) {
+			const dist = Math.hypot(Number(h.attributes('cx')) - cx, Number(h.attributes('cy')) - cy)
+			expect(dist).toBeCloseTo(r, 3)
+		}
 
 		const boxLink: SheetAnnotation = {
 			...circleLink,
@@ -154,6 +163,10 @@ describe('SongAnnotationSelectionBox.vue', () => {
 		expect(boxOutline.exists()).toBe(true)
 		expect(boxOutline.attributes('stroke-dasharray')).toBeUndefined()
 		expect(boxOutline.attributes('rx')).toBe('4')
-		expect(boxWrapper.findAll('rect[data-resize-handle]')).toHaveLength(4)
+		const boxHandles = boxWrapper.findAll('rect[data-resize-handle]')
+		expect(boxHandles).toHaveLength(4)
+		// NW handle is centered directly on (item.x * 1000, item.y * vbHeight) with zero padding
+		expect(Number(boxHandles[0].attributes('x')) + Number(boxHandles[0].attributes('width')) / 2).toBeCloseTo(200, 3)
+		expect(Number(boxHandles[0].attributes('y')) + Number(boxHandles[0].attributes('height')) / 2).toBeCloseTo(0.3 * 1414, 3)
 	})
 })

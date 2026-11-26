@@ -4,6 +4,7 @@ import type { Bookmark } from '../../types/song'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import {
 	clampNormalizedCoord,
+	getLinkCenter,
 	type LinkArrivalBeacon,
 	type LinkJumpPayload,
 	type LinkTargetPickRequest,
@@ -200,12 +201,13 @@ const selectedLinkTarget = computed(() => {
 	const ty = clampNormalizedCoord(sel.data?.targetY)
 	if (tx === undefined || ty === undefined) return null
 	const samePage = sel.pageNumber === pageIndex.value
+	const center = samePage ? getLinkCenter(sel) : { x: 0, y: 0 }
 	return {
 		x: tx,
 		y: ty,
 		samePage,
-		sourceX: samePage ? sel.x + (sel.width || 0.1) / 2 : 0,
-		sourceY: samePage ? sel.y + (sel.height || 0.06) / 2 : 0,
+		sourceX: center.x,
+		sourceY: center.y,
 	}
 })
 
