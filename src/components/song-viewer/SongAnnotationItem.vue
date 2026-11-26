@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
+import { resolveLinkColors, type LinkJumpPayload } from '../../utils/annotationLinks'
 import { computed } from 'vue'
 import {
 	getAnnotationDashArray,
@@ -30,9 +31,25 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-	'jump-to-page': [pageNumber: number]
+	'jump-to-page': [payload: LinkJumpPayload]
 	'dblclick-text': [item: SheetAnnotation]
 }>()
+
+const linkColors = computed(() =>
+	props.item.type === 'link' ? resolveLinkColors(props.item.style?.color) : null,
+)
+
+function onLinkClick(event: MouseEvent) {
+	if (props.editable) return
+	event.stopPropagation()
+	emit('jump-to-page', {
+		targetPage: props.item.data?.targetPage ?? 0,
+		sourcePage: props.item.pageNumber,
+		targetX: props.item.data?.targetX,
+		targetY: props.item.data?.targetY,
+		label: props.item.data?.label,
+	})
+}
 
 const isPathItem = computed(() =>
 	props.item.type === 'drawing'
@@ -250,7 +267,7 @@ const textLayout = computed(() =>
 			v-else-if="item.type === 'link'"
 			:data-ann-uuid="item.uuid"
 			class="sheetmusic-annotation-link-group"
-			@click="!editable && ($event.stopPropagation(), emit('jump-to-page', item.data?.targetPage ?? 0))"
+			@click="onLinkClick"
 			@dblclick="editable && emit('dblclick-text', item)">
 			<rect
 				:x="item.x * VIEWBOX_WIDTH"
@@ -259,6 +276,7 @@ const textLayout = computed(() =>
 				:height="item.height * vbHeight"
 				rx="4"
 				class="sheetmusic-annotation-link"
+				:style="linkColors ? { fill: linkColors.fill, stroke: linkColors.stroke } : undefined"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-link" />
 			<text
@@ -269,7 +287,8 @@ const textLayout = computed(() =>
 				dominant-baseline="central"
 				:font-size="item.style?.fontSize || 14"
 				font-weight="600"
-				fill="#0052cc"
+				:fill="linkColors?.text || '#0052cc'"
+				pointer-events="none"
 				:data-ann-uuid="item.uuid">
 				{{ item.data.label }}
 			</text>

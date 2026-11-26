@@ -211,7 +211,13 @@ describe('SongAnnotationOverlay.vue', () => {
 		const linkGroup = wrapper.find('.sheetmusic-annotation-link-group')
 		await linkGroup.trigger('click')
 
-		expect(wrapper.emitted('jump-to-page')).toEqual([[3]])
+		expect(wrapper.emitted('jump-to-page')).toEqual([[{
+			targetPage: 3,
+			sourcePage: 0,
+			targetX: undefined,
+			targetY: undefined,
+			label: 'To Coda',
+		}]])
 	})
 
 	it('hides all markings when visible prop is false', () => {

@@ -71,6 +71,8 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 				width: ann.width || 0.1,
 				height: ann.height || 0.06,
 				targetPageOneIndexed: (ann.data?.targetPage ?? 0) + 1,
+				targetX: ann.data?.targetX,
+				targetY: ann.data?.targetY,
 				label: ann.data?.label ?? '',
 				existing: ann,
 			}
@@ -127,11 +129,14 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 		pendingLink.value = null
 		const targetZeroIndexed = Math.max(0, Math.min(opts.totalPages.value - 1, pending.targetPageOneIndexed - 1))
 		const label = pending.label.trim() || `→ p. ${targetZeroIndexed + 1}`
+		const targetCoords = pending.targetX !== undefined && pending.targetY !== undefined
+			? { targetX: roundNorm(pending.targetX), targetY: roundNorm(pending.targetY) }
+			: {}
 
 		if (pending.mode === 'edit' && pending.existing) {
 			opts.onUpdate(pending.existing, {
 				...pending.existing,
-				data: { ...pending.existing.data, targetPage: targetZeroIndexed, label },
+				data: { ...pending.existing.data, targetPage: targetZeroIndexed, label, ...targetCoords },
 			})
 			return
 		}
@@ -145,10 +150,11 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 			width: roundNorm(pending.width),
 			height: roundNorm(pending.height),
 			style: {
+				color: opts.toolStyle.value.color || '#0052cc',
 				opacity: 1,
 				fontSize: opts.toolStyle.value.fontSize,
 			},
-			data: { targetPage: targetZeroIndexed, label },
+			data: { targetPage: targetZeroIndexed, label, ...targetCoords },
 		})
 	}
 

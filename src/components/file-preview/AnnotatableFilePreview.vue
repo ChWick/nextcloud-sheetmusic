@@ -5,6 +5,10 @@ import SongAnnotationToolbar from '../song-viewer/SongAnnotationToolbar.vue'
 import { type AnnotationEditorContext, useAnnotationEditor } from '../../composables/useAnnotationEditor'
 import { useAnnotationLayers } from '../../composables/useAnnotationLayers'
 import type { SheetAnnotation } from '../../types/annotation'
+import type { Bookmark } from '../../types/song'
+import { translate as t } from '@nextcloud/l10n'
+import { roundNorm } from '../../utils/annotationTransform'
+import type { LinkTargetPickRequest, LinkTargetPickResult } from '../../utils/annotationLinks'
 import {
 	getCachedFileMusicFont,
 	loadFileMusicFont,
@@ -22,6 +26,7 @@ const props = withDefaults(defineProps<{
 	annotations?: SheetAnnotation[]
 	annotationContext: AnnotationEditorContext
 	canAnnotate?: boolean
+	bookmarks?: Bookmark[]
 }>(), {
 	fileName: undefined,
 	pageOrder: undefined,
@@ -30,6 +35,7 @@ const props = withDefaults(defineProps<{
 	previewKey: undefined,
 	annotations: () => [],
 	canAnnotate: true,
+	bookmarks: () => [],
 })
 
 const emit = defineEmits<{
@@ -150,6 +156,74 @@ const totalPages = computed(() => filePreviewerRef.value?.totalPages ?? 1)
 const fileSizeBytes = computed(() => filePreviewerRef.value?.fileSizeBytes ?? null)
 const pageResolutions = computed(() => filePreviewerRef.value?.pageResolutions ?? [])
 const showAnnotationsState = computed(() => filePreviewerRef.value?.showAnnotationsState ?? true)
+const linkTargetPick = ref<LinkTargetPickRequest | null>(null)
+
+function handleStartPickLinkTarget(req: LinkTargetPickRequest) {
+	linkTargetPick.value = req
+}
+
+function handlePickSelectedLinkTarget() {
+	const sel = selectedAnnotation.value
+	if (!sel || sel.type !== 'link') return
+	linkTargetPick.value = {
+		mode: 'edit',
+		existing: sel,
+	}
+}
+
+function cancelLinkTargetPick() {
+	linkTargetPick.value = null
+}
+
+function handleCompletePickLinkTarget(res: LinkTargetPickResult) {
+	const req = linkTargetPick.value
+	if (!req) return
+	linkTargetPick.value = null
+
+	const targetX = roundNorm(res.x)
+	const targetY = roundNorm(res.y)
+
+	if (req.mode === 'edit' && req.existing) {
+		updateAnnotation(req.existing, {
+			...req.existing,
+			data: {
+				...req.existing.data,
+				targetPage: res.pageIndex,
+				targetX,
+				targetY,
+			},
+		})
+		return
+	}
+
+	const label = req.label?.trim() || `→ p. ${res.pageIndex + 1}`
+	handleCreateAnnotation({
+		pageNumber: req.sourcePageIndex ?? Math.max(0, currentPage.value - 1),
+		layerIndex: 0,
+		type: 'link',
+		x: roundNorm(req.x ?? 0.1),
+		y: roundNorm(req.y ?? 0.1),
+		width: roundNorm(req.width ?? 0.1),
+		height: roundNorm(req.height ?? 0.06),
+		style: {
+			color: toolStyle.value.color || '#0052cc',
+			opacity: 1,
+			fontSize: toolStyle.value.fontSize,
+		},
+		data: {
+			targetPage: res.pageIndex,
+			targetX,
+			targetY,
+			label,
+		},
+	})
+}
+
+watch(isEditing, (editing) => {
+	if (!editing) {
+		linkTargetPick.value = null
+	}
+})
 
 function toggleAnnotations() {
 	filePreviewerRef.value?.toggleAnnotations()
@@ -197,11 +271,27 @@ defineExpose({
 			@toggle-selected-layer="handleToggleSelectedLayer"
 			@update-selected-style="updateSelectedStyle"
 			@update-selected-data="updateSelectedData"
+			@pick-selected-link-target="handlePickSelectedLinkTarget"
 			@undo="undo"
 			@redo="redo"
 			@delete-selected="deleteSelected"
 			@clear-page="clearPage(currentPage - 1)"
 			@done="exitEditMode" />
+
+		<div
+			v-if="linkTargetPick"
+			:class="$style.pickBanner"
+			role="status"
+			data-test="link-target-pick-banner">
+			<span>{{ t('sheetmusic', 'Click the exact destination measure on any page') }}</span>
+			<button
+				type="button"
+				:class="$style.pickCancelBtn"
+				data-test="link-target-pick-cancel"
+				@click="cancelLinkTargetPick">
+				{{ t('sheetmusic', 'Cancel') }}
+			</button>
+		</div>
 
 		<FilePreviewer
 			ref="filePreviewerRef"
@@ -218,12 +308,16 @@ defineExpose({
 			:selected-annotation-uuid="selectedUuid"
 			:selected-annotation-uuids="selectedUuids"
 			:music-font="musicFont"
+			:bookmarks="bookmarks"
+			:picking-link-target="linkTargetPick !== null"
 			@select-annotation="selectAnnotation"
 			@select-annotations="selectAnnotations"
 			@create-annotation="handleCreateAnnotation"
 			@update-annotation="updateAnnotation"
 			@batch-update-annotations="batchUpdateAnnotations"
-			@delete-annotation="deleteAnnotation" />
+			@delete-annotation="deleteAnnotation"
+			@start-pick-link-target="handleStartPickLinkTarget"
+			@complete-pick-link-target="handleCompletePickLinkTarget" />
 	</div>
 </template>
 
@@ -234,5 +328,29 @@ defineExpose({
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
+}
+
+.pickBanner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 6px 12px;
+	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #ffffff);
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+button[type='button'].pickCancelBtn {
+	margin: 0;
+	padding: 2px 10px;
+	min-height: 26px;
+	border: 1px solid rgba(255, 255, 255, 0.7);
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font-size: 0.8rem;
+	cursor: pointer;
 }
 </style>

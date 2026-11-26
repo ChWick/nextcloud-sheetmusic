@@ -6,10 +6,12 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas } from '../utils/pdfjs'
 import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import ArrowULeftTopIcon from 'vue-material-design-icons/ArrowULeftTop.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import XlsxPreviewPane, { type XlsxSheet } from './file-preview/XlsxPreviewPane.vue'
 import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
 import { useFilePreviewZoom } from '../composables/useFilePreviewZoom'
+import { useLinkJumpNavigation } from '../composables/useLinkJumpNavigation'
 import { usePdfPageNavigation } from '../composables/usePdfPageNavigation'
 import { usePdfResizeObserver } from '../composables/usePdfResizeObserver'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
@@ -18,6 +20,8 @@ import { fetchCachedBinaryFile } from '../utils/file-binary'
 import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
+import type { Bookmark } from '../types/song'
+import type { LinkTargetPickRequest, LinkTargetPickResult } from '../utils/annotationLinks'
 import type { MusicFontId } from '../utils/musicFont'
 import type { EditorTool, EditorToolStyle } from '../composables/useAnnotationEditor'
 import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
@@ -67,6 +71,8 @@ const props = withDefaults(
 		selectedAnnotationUuid?: string | null
 		selectedAnnotationUuids?: string[]
 		musicFont?: MusicFontId
+		bookmarks?: Bookmark[]
+		pickingLinkTarget?: boolean
 		binaryCache?: FileBinaryCache
 		initialPageLayout?: 'continuous' | 'single' | 'double' | 'auto'
 		initialDoublePageTurnMode?: DoublePageTurnMode
@@ -98,6 +104,8 @@ const props = withDefaults(
 		selectedAnnotationUuid: null,
 		selectedAnnotationUuids: () => [],
 		musicFont: 'bravura',
+		bookmarks: () => [],
+		pickingLinkTarget: false,
 		binaryCache: () => defaultFileBinaryCache,
 		initialPageLayout: 'continuous',
 		initialDoublePageTurnMode: 'half',
@@ -124,6 +132,8 @@ const emit = defineEmits<{
 	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
 	'batch-update-annotations': [pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>]
 	'delete-annotation': [annotation: SheetAnnotation]
+	'start-pick-link-target': [req: LinkTargetPickRequest]
+	'complete-pick-link-target': [res: LinkTargetPickResult]
 }>()
 
 const pdfContainer = ref<HTMLElement>()
@@ -179,6 +189,15 @@ const {
 })
 
 const {
+	activeBeacon: linkBeacon,
+	jumpBackEntry,
+	jumpFromLink,
+	jumpBack,
+} = useLinkJumpNavigation({
+	goToPage: (page) => goToPage(page),
+})
+
+const {
 	showAnnotationsState,
 	toggleAnnotations,
 	mountAnnotationOverlay,
@@ -195,7 +214,12 @@ const {
 	selectedAnnotationUuid: computed(() => props.selectedAnnotationUuid),
 	selectedAnnotationUuids: computed(() => props.selectedAnnotationUuids),
 	musicFont: computed(() => props.musicFont),
-	onJumpToPage: (page) => goToPage(page),
+	bookmarks: computed(() => props.bookmarks),
+	linkBeacon,
+	pickingLinkTarget: computed(() => props.pickingLinkTarget),
+	onJumpToPage: jumpFromLink,
+	onStartPickLinkTarget: (req) => emit('start-pick-link-target', req),
+	onCompletePickLinkTarget: (res) => emit('complete-pick-link-target', res),
 	onSelect: (uuid) => emit('select-annotation', uuid),
 	onSelectMany: (uuids) => emit('select-annotations', uuids),
 	onCreate: (draft) => emit('create-annotation', draft),
@@ -998,6 +1022,18 @@ defineExpose({
 			</NcButton>
 		</div>
 
+		<!-- Floating Jump-Back Chip after clicking a page link -->
+		<button
+			v-if="jumpBackEntry && !isLoading && isPdfFile"
+			type="button"
+			:class="$style.linkJumpBackChip"
+			:aria-label="t('sheetmusic', 'Return to page {page}', { page: jumpBackEntry.returnPage })"
+			data-test="link-jump-back-button"
+			@click.stop="jumpBack">
+			<ArrowULeftTopIcon :size="16" />
+			<span>{{ t('sheetmusic', 'Return to p. {page}', { page: jumpBackEntry.returnPage }) }}</span>
+		</button>
+
 		<!-- PDF / Image Viewer Toolbar -->
 		<FilePreviewerToolbar
 			v-if="!hideToolbar && !isLoading && !errorMessage && (isPdfFile || isImageFile)"
@@ -1030,12 +1066,39 @@ defineExpose({
 
 <style module>
 .wrapper {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	width: 100%;
 	height: 100%;
 	flex: 1;
 	min-height: 0;
+}
+
+button[type='button'].linkJumpBackChip {
+	position: absolute;
+	left: 50%;
+	bottom: 64px;
+	transform: translateX(-50%);
+	z-index: 25;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	padding: 6px 14px;
+	border: 1px solid var(--color-primary-element, #0082c9);
+	border-radius: 999px;
+	background: var(--color-main-background, #ffffff);
+	color: var(--color-main-text, #222222);
+	font-size: 0.85rem;
+	font-weight: 600;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+	cursor: pointer;
+}
+
+button[type='button'].linkJumpBackChip:hover {
+	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-text, #ffffff);
 }
 
 .loading {

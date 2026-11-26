@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
+import type { Bookmark } from '../../types/song'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
+import type { LinkArrivalBeacon, LinkJumpPayload, LinkTargetPickRequest, LinkTargetPickResult } from '../../utils/annotationLinks'
 import type { MusicFontId } from '../../utils/musicFont'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { generateSmoothSvgPath, getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
@@ -27,6 +29,9 @@ const props = withDefaults(
 		selectedUuid?: string | null
 		selectedUuids?: string[]
 		musicFont?: MusicFontId
+		bookmarks?: Bookmark[]
+		linkBeacon?: LinkArrivalBeacon | null
+		pickingLinkTarget?: boolean
 	}>(),
 	{
 		annotations: () => [],
@@ -40,11 +45,16 @@ const props = withDefaults(
 		selectedUuid: null,
 		selectedUuids: () => [],
 		musicFont: 'bravura',
+		bookmarks: () => [],
+		linkBeacon: null,
+		pickingLinkTarget: false,
 	},
 )
 
 const emit = defineEmits<{
-	'jump-to-page': [pageNumber: number]
+	'jump-to-page': [payload: LinkJumpPayload]
+	'start-pick-link-target': [req: LinkTargetPickRequest]
+	'complete-pick-link-target': [res: LinkTargetPickResult]
 	select: [uuid: string | null]
 	'select-many': [uuids: string[]]
 	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }]
@@ -186,6 +196,7 @@ const handwritingPreviewPath = computed(() => {
 })
 
 const cursorClass = computed(() => {
+	if (props.pickingLinkTarget) return 'cursor-crosshair'
 	if (!props.editable) return ''
 	switch (props.activeTool) {
 		case 'select':
@@ -198,20 +209,51 @@ const cursorClass = computed(() => {
 			return 'cursor-crosshair'
 	}
 })
+
+function handleOverlayPointerDown(e: PointerEvent) {
+	if (props.pickingLinkTarget && svgRef.value) {
+		e.preventDefault()
+		e.stopPropagation()
+		const rect = svgRef.value.getBoundingClientRect()
+		if (rect.width > 0 && rect.height > 0) {
+			const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+			const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+			emit('complete-pick-link-target', { pageIndex: pageIndex.value, x, y })
+		}
+		return
+	}
+	onPointerDown(e)
+}
+
+function handleStartPickLinkTarget() {
+	const pending = pendingLink.value
+	if (!pending) return
+	pendingLink.value = null
+	emit('start-pick-link-target', {
+		mode: pending.mode ?? 'create',
+		sourcePageIndex: pageIndex.value,
+		x: pending.x,
+		y: pending.y,
+		width: pending.width,
+		height: pending.height,
+		label: pending.label,
+		existing: pending.existing,
+	})
+}
 </script>
 
 <template>
 	<div
-		v-if="visible && (displayedAnnotations.length > 0 || editable)"
+		v-if="(visible && (displayedAnnotations.length > 0 || editable)) || (linkBeacon && linkBeacon.pageNumber === pageNumber) || pickingLinkTarget"
 		class="sheetmusic-annotation-layer">
 		<svg
 			ref="svgRef"
 			class="sheetmusic-annotation-overlay"
-			:class="[{ 'is-editable': editable, 'is-stylus-only': editable && isTouchDrawingBlocked }, cursorClass]"
+			:class="[{ 'is-editable': editable || pickingLinkTarget, 'is-stylus-only': editable && !pickingLinkTarget && isTouchDrawingBlocked }, cursorClass]"
 			data-test="annotation-overlay"
 			:viewBox="`0 0 ${VIEWBOX_WIDTH} ${vbHeight}`"
 			preserveAspectRatio="xMidYMid meet"
-			@pointerdown="onPointerDown"
+			@pointerdown="handleOverlayPointerDown"
 			@pointermove="onPointerMove"
 			@pointerup="onPointerUp"
 			@pointercancel="onPointerCancel"
@@ -261,6 +303,24 @@ const cursorClass = computed(() => {
 				:vb-height="vbHeight"
 				:ui-scale="uiScale"
 				:show-handles="selectedItems.length === 1" />
+
+			<g
+				v-if="linkBeacon && linkBeacon.pageNumber === pageNumber"
+				:key="`beacon-${linkBeacon.token}`"
+				class="sheetmusic-link-beacon"
+				pointer-events="none"
+				data-test="annotation-link-beacon">
+				<circle
+					:cx="linkBeacon.x * VIEWBOX_WIDTH"
+					:cy="linkBeacon.y * vbHeight"
+					:r="34 * uiScale"
+					class="sheetmusic-link-beacon-ring" />
+				<circle
+					:cx="linkBeacon.x * VIEWBOX_WIDTH"
+					:cy="linkBeacon.y * vbHeight"
+					:r="10 * uiScale"
+					class="sheetmusic-link-beacon-core" />
+			</g>
 		</svg>
 
 		<SongAnnotationHandwritingPill
@@ -276,9 +336,11 @@ const cursorClass = computed(() => {
 			:pending-text="pendingText"
 			:pending-link="pendingLink"
 			:total-pages="totalPages"
+			:bookmarks="bookmarks"
 			@update:pending-text-text="pendingText && (pendingText.text = $event)"
 			@update:pending-link-page="pendingLink && (pendingLink.targetPageOneIndexed = $event)"
 			@update:pending-link-label="pendingLink && (pendingLink.label = $event)"
+			@pick-link-target="handleStartPickLinkTarget"
 			@commit-text="commitPendingText"
 			@cancel-text="cancelPendingText"
 			@commit-link="commitPendingLink"
@@ -363,5 +425,31 @@ const cursorClass = computed(() => {
 	stroke: #0082c9;
 	cursor: ns-resize;
 	pointer-events: auto;
+}
+
+.sheetmusic-link-beacon-ring {
+	fill: rgba(0, 130, 201, 0.22);
+	stroke: #0082c9;
+	stroke-width: 3;
+	animation: sheetmusic-beacon-pulse 1.1s ease-out 2;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+.sheetmusic-link-beacon-core {
+	fill: #0082c9;
+	opacity: 0.85;
+}
+
+@keyframes sheetmusic-beacon-pulse {
+	0% {
+		transform: scale(0.55);
+		opacity: 0.95;
+	}
+
+	100% {
+		transform: scale(1.65);
+		opacity: 0;
+	}
 }
 </style>

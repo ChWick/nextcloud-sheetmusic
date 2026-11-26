@@ -6,6 +6,8 @@
 import type { ComputedRef, Ref } from 'vue'
 import { getCurrentInstance, h, ref, render, watch } from 'vue'
 import type { SheetAnnotation } from '../types/annotation'
+import type { Bookmark } from '../types/song'
+import type { LinkArrivalBeacon, LinkJumpPayload, LinkTargetPickRequest, LinkTargetPickResult } from '../utils/annotationLinks'
 import type { MusicFontId } from '../utils/musicFont'
 import { isCropped, type NormalizedCropBox } from '../utils/pdfCrop'
 import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
@@ -22,7 +24,12 @@ export interface UseAnnotationOverlayHostOptions {
 	selectedAnnotationUuid: ComputedRef<string | null>
 	selectedAnnotationUuids?: ComputedRef<string[]>
 	musicFont?: ComputedRef<MusicFontId | undefined>
-	onJumpToPage: (targetOneIndexed: number) => void
+	bookmarks?: ComputedRef<Bookmark[] | undefined>
+	linkBeacon?: Ref<LinkArrivalBeacon | null>
+	pickingLinkTarget?: ComputedRef<boolean>
+	onJumpToPage: (payload: LinkJumpPayload) => void
+	onStartPickLinkTarget?: (req: LinkTargetPickRequest) => void
+	onCompletePickLinkTarget?: (res: LinkTargetPickResult) => void
 	onSelect: (uuid: string | null) => void
 	onSelectMany?: (uuids: string[]) => void
 	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
@@ -106,7 +113,12 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			selectedUuid: opts.selectedAnnotationUuid.value,
 			selectedUuids: opts.selectedAnnotationUuids?.value ?? [],
 			musicFont: opts.musicFont?.value ?? 'bravura',
-			onJumpToPage: (targetZeroIdx: number) => opts.onJumpToPage(targetZeroIdx + 1),
+			bookmarks: opts.bookmarks?.value ?? [],
+			linkBeacon: opts.linkBeacon?.value ?? null,
+			pickingLinkTarget: opts.pickingLinkTarget?.value ?? false,
+			onJumpToPage: (payload: LinkJumpPayload) => opts.onJumpToPage(payload),
+			onStartPickLinkTarget: opts.onStartPickLinkTarget,
+			onCompletePickLinkTarget: opts.onCompletePickLinkTarget,
 			onSelect: opts.onSelect,
 			onSelectMany: opts.onSelectMany,
 			onCreateAnnotation: opts.onCreate,
@@ -152,6 +164,9 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			opts.selectedAnnotationUuid.value,
 			opts.selectedAnnotationUuids?.value,
 			opts.musicFont?.value,
+			opts.bookmarks?.value,
+			opts.linkBeacon?.value,
+			opts.pickingLinkTarget?.value,
 		],
 		() => {
 			refreshAnnotationOverlays()

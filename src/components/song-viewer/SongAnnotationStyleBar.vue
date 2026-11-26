@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import type { LineStyle, SheetAnnotation, TextAlign } from '../../types/annotation'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import FormatAlignCenter from 'vue-material-design-icons/FormatAlignCenter.vue'
 import FormatAlignLeft from 'vue-material-design-icons/FormatAlignLeft.vue'
 import FormatAlignRight from 'vue-material-design-icons/FormatAlignRight.vue'
+import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
+import ViewportPopover from '../ViewportPopover.vue'
 import SongAnnotationColorPicker, { type ColorSwatch } from './SongAnnotationColorPicker.vue'
 import SongAnnotationLineStylePicker from './SongAnnotationLineStylePicker.vue'
 import SongAnnotationLogSelect from './SongAnnotationLogSelect.vue'
+import { LINK_LABEL_PRESETS } from '../../utils/annotationLinks'
 
 const props = withDefaults(
 	defineProps<{
@@ -28,6 +31,7 @@ const emit = defineEmits<{
 	'update:toolStyle': [style: EditorToolStyle]
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
+	'pick-selected-link-target': []
 }>()
 
 const COLOR_SWATCHES: ColorSwatch[] = [
@@ -101,7 +105,8 @@ const showFontSize = computed(() =>
 )
 
 const showTextAlign = computed(() => props.activeTool === 'text' || hasTextSelected.value)
-const showSelectedText = computed(() => singleSelected.value?.type === 'text' || singleSelected.value?.type === 'link')
+const showSelectedText = computed(() => singleSelected.value?.type === 'text')
+const isLinkEditOpen = ref(false)
 
 const activeColor = computed(() => {
 	const sel = primarySelected.value
@@ -237,6 +242,37 @@ function commitSelectedText(rawValue: string) {
 	}
 }
 
+const isSingleLinkSelected = computed(() => singleSelected.value?.type === 'link')
+
+const selectedLinkPage = computed(() => {
+	const sel = singleSelected.value
+	if (sel?.type !== 'link') return 1
+	return (sel.data?.targetPage ?? 0) + 1
+})
+
+const hasSelectedLinkSpot = computed(() => {
+	const sel = singleSelected.value
+	return sel?.type === 'link'
+		&& typeof sel.data?.targetX === 'number'
+		&& typeof sel.data?.targetY === 'number'
+})
+
+function commitSelectedLinkPage(rawValue: string) {
+	const sel = singleSelected.value
+	if (sel?.type !== 'link') return
+	const parsed = Number.parseInt(rawValue, 10)
+	if (!Number.isFinite(parsed) || parsed < 1) return
+	const nextZeroIndexed = parsed - 1
+	if (nextZeroIndexed !== (sel.data?.targetPage ?? 0)) {
+		emit('update-selected-data', { targetPage: nextZeroIndexed, targetX: undefined, targetY: undefined })
+	}
+}
+
+function startPickSelectedLinkTarget() {
+	isLinkEditOpen.value = false
+	emit('pick-selected-link-target')
+}
+
 function updateShapeHeight(height: number) {
 	const sel = firstHeightAdjustableSelected.value
 	if (sel?.type === 'shape') {
@@ -340,21 +376,84 @@ function updateShapeHeight(height: number) {
 			</button>
 		</div>
 
-		<!-- Selected Text / Link Label -->
+		<!-- Selected Text -->
 		<div v-if="showSelectedText && singleSelected" :class="$style.styleGroup">
-			<span :class="$style.styleLabel">
-				{{ singleSelected.type === 'link' ? t('sheetmusic', 'Label') : t('sheetmusic', 'Text') }}
-			</span>
+			<span :class="$style.styleLabel">{{ t('sheetmusic', 'Text') }}</span>
 			<input
 				type="text"
 				:value="selectedTextValue"
-				:placeholder="singleSelected.type === 'link' ? t('sheetmusic', 'Link label...') : t('sheetmusic', 'Annotation text...')"
-				:aria-label="singleSelected.type === 'link' ? t('sheetmusic', 'Link label') : t('sheetmusic', 'Annotation text')"
+				:placeholder="t('sheetmusic', 'Annotation text...')"
+				:aria-label="t('sheetmusic', 'Annotation text')"
 				:class="$style.textEditInput"
 				data-test="selected-annotation-text-input"
 				@change="commitSelectedText(($event.target as HTMLInputElement).value)"
 				@keydown.enter.prevent="($event.target as HTMLInputElement).blur()" />
 		</div>
+
+		<!-- Selected Link Editor Popover -->
+		<ViewportPopover
+			v-if="isSingleLinkSelected"
+			v-model:open="isLinkEditOpen"
+			pane-test-id="selected-link-edit-popover"
+			:pane-class="$style.linkEditPopover"
+			:gap="6">
+			<template #trigger="{ toggle }">
+				<button
+					type="button"
+					:class="[$style.chipBtn, isLinkEditOpen && $style.active]"
+					:title="t('sheetmusic', 'Edit link target and label')"
+					:aria-label="t('sheetmusic', 'Edit link')"
+					data-test="selected-link-edit-button"
+					@click="toggle">
+					<LinkVariant :size="14" />
+					<span>{{ t('sheetmusic', 'p. {page}', { page: selectedLinkPage }) }}</span>
+				</button>
+			</template>
+
+			<div :class="$style.linkPopoverBody">
+				<label :class="$style.linkPopoverRow">
+					<span>{{ t('sheetmusic', 'Target page') }}</span>
+					<input
+						type="number"
+						min="1"
+						:value="selectedLinkPage"
+						:aria-label="t('sheetmusic', 'Link target page')"
+						:class="$style.popoverInput"
+						data-test="selected-link-page-input"
+						@change="commitSelectedLinkPage(($event.target as HTMLInputElement).value)">
+				</label>
+				<label :class="$style.linkPopoverRow">
+					<span>{{ t('sheetmusic', 'Button label') }}</span>
+					<input
+						type="text"
+						:value="selectedTextValue"
+						:placeholder="t('sheetmusic', 'e.g. To Coda')"
+						:aria-label="t('sheetmusic', 'Link label')"
+						:class="$style.popoverInput"
+						data-test="selected-annotation-text-input"
+						@change="commitSelectedText(($event.target as HTMLInputElement).value)">
+				</label>
+				<div :class="$style.linkPresetRow">
+					<button
+						v-for="preset in LINK_LABEL_PRESETS"
+						:key="preset"
+						type="button"
+						:class="[$style.miniChip, selectedTextValue === preset && $style.miniChipActive]"
+						@click="commitSelectedText(preset)">
+						{{ preset }}
+					</button>
+				</div>
+				<button
+					type="button"
+					:class="$style.pickSpotBtn"
+					data-test="selected-link-pick-target"
+					@click="startPickSelectedLinkTarget">
+					{{ hasSelectedLinkSpot
+						? t('sheetmusic', 'Repick target spot on score…')
+						: t('sheetmusic', 'Pick exact target spot on score…') }}
+				</button>
+			</div>
+		</ViewportPopover>
 	</div>
 </template>
 
@@ -422,5 +521,79 @@ button[type='button'].chipBtn {
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 0.8rem;
+}
+
+.linkEditPopover {
+	padding: 10px;
+	width: 240px;
+}
+
+.linkPopoverBody {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.linkPopoverRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 0.8rem;
+}
+
+.popoverInput {
+	width: 120px;
+	height: 28px;
+	padding: 2px 6px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: var(--border-radius, 4px);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.8rem;
+	box-sizing: border-box;
+}
+
+.linkPresetRow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+button[type='button'].miniChip {
+	margin: 0;
+	padding: 2px 7px;
+	min-height: 24px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: 999px;
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+	font-size: 0.72rem;
+	cursor: pointer;
+}
+
+button[type='button'].miniChipActive {
+	border-color: var(--color-primary-element, #0082c9);
+	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #ffffff);
+	font-weight: 600;
+}
+
+button[type='button'].pickSpotBtn {
+	width: 100%;
+	margin: 0;
+	padding: 5px 8px;
+	border: 1px dashed var(--color-primary-element, #0082c9);
+	border-radius: 6px;
+	background: var(--color-primary-light, #e6f4fa);
+	color: var(--color-main-text);
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+button[type='button'].pickSpotBtn:hover {
+	background: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #ffffff);
 }
 </style>

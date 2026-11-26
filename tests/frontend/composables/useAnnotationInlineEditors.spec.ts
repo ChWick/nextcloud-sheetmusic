@@ -100,7 +100,7 @@ describe('useAnnotationInlineEditors', () => {
 		api.commitPendingLink()
 		expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
 			type: 'link',
-			style: { opacity: 1, fontSize: 24 },
+			style: { color: '#1e88e5', opacity: 1, fontSize: 24 },
 			data: { targetPage: 2, label: '→ p. 3' },
 		}))
 
