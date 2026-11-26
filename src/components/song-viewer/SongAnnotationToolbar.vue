@@ -72,6 +72,7 @@ const emit = defineEmits<{
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 	'pick-selected-link-target': []
+	'open-selected-link-picker': []
 	undo: []
 	redo: []
 	'delete-selected': []
@@ -293,7 +294,8 @@ function pickStamp(symbol: string) {
 				@update:tool-style="emit('update:toolStyle', $event)"
 				@update-selected-style="emit('update-selected-style', $event)"
 				@update-selected-data="emit('update-selected-data', $event)"
-				@pick-selected-link-target="emit('pick-selected-link-target')" />
+				@pick-selected-link-target="emit('pick-selected-link-target')"
+				@open-selected-link-picker="emit('open-selected-link-picker')" />
 
 			<div :class="$style.actionGroup">
 				<SongAnnotationLayerPicker
@@ -367,7 +369,8 @@ function pickStamp(symbol: string) {
 							@update:tool-style="emit('update:toolStyle', $event)"
 							@update-selected-style="emit('update-selected-style', $event)"
 							@update-selected-data="emit('update-selected-data', $event)"
-				@pick-selected-link-target="emit('pick-selected-link-target')" />
+				@pick-selected-link-target="emit('pick-selected-link-target')"
+				@open-selected-link-picker="emit('open-selected-link-picker')" />
 					</div>
 
 					<div v-if="overflowLayers" :class="$style.overflowRow">

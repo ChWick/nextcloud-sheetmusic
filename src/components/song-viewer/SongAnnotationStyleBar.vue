@@ -11,7 +11,7 @@ import ViewportPopover from '../ViewportPopover.vue'
 import SongAnnotationColorPicker, { type ColorSwatch } from './SongAnnotationColorPicker.vue'
 import SongAnnotationLineStylePicker from './SongAnnotationLineStylePicker.vue'
 import SongAnnotationLogSelect from './SongAnnotationLogSelect.vue'
-import { LINK_LABEL_PRESETS } from '../../utils/annotationLinks'
+import { LINK_LABEL_PRESETS, type LinkMarkerStyle } from '../../utils/annotationLinks'
 
 const props = withDefaults(
 	defineProps<{
@@ -32,6 +32,7 @@ const emit = defineEmits<{
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 	'pick-selected-link-target': []
+	'open-selected-link-picker': []
 }>()
 
 const COLOR_SWATCHES: ColorSwatch[] = [
@@ -268,9 +269,24 @@ function commitSelectedLinkPage(rawValue: string) {
 	}
 }
 
+const selectedLinkStyle = computed<LinkMarkerStyle>(() =>
+	singleSelected.value?.data?.linkStyle === 'circle' ? 'circle' : 'box',
+)
+
+function commitSelectedLinkStyle(style: LinkMarkerStyle) {
+	const sel = singleSelected.value
+	if (sel?.type !== 'link') return
+	emit('update-selected-data', { linkStyle: style })
+}
+
 function startPickSelectedLinkTarget() {
 	isLinkEditOpen.value = false
 	emit('pick-selected-link-target')
+}
+
+function openSelectedLinkPicker() {
+	isLinkEditOpen.value = false
+	emit('open-selected-link-picker')
 }
 
 function updateShapeHeight(height: number) {
@@ -443,15 +459,43 @@ function updateShapeHeight(height: number) {
 						{{ preset }}
 					</button>
 				</div>
-				<button
-					type="button"
-					:class="$style.pickSpotBtn"
-					data-test="selected-link-pick-target"
-					@click="startPickSelectedLinkTarget">
-					{{ hasSelectedLinkSpot
-						? t('sheetmusic', 'Repick target spot on score…')
-						: t('sheetmusic', 'Pick exact target spot on score…') }}
-				</button>
+				<div :class="$style.linkPopoverRow">
+					<span>{{ t('sheetmusic', 'Style') }}</span>
+					<div :class="$style.linkPresetRow">
+						<button
+							type="button"
+							:class="[$style.miniChip, selectedLinkStyle === 'box' && $style.miniChipActive]"
+							data-test="selected-link-style-box"
+							@click="commitSelectedLinkStyle('box')">
+							{{ t('sheetmusic', 'Box') }}
+						</button>
+						<button
+							type="button"
+							:class="[$style.miniChip, selectedLinkStyle === 'circle' && $style.miniChipActive]"
+							data-test="selected-link-style-circle"
+							@click="commitSelectedLinkStyle('circle')">
+							{{ t('sheetmusic', 'Circle') }}
+						</button>
+					</div>
+				</div>
+				<div :class="$style.pickBtnRow">
+					<button
+						type="button"
+						:class="$style.pickSpotBtn"
+						data-test="selected-link-pick-target"
+						@click="startPickSelectedLinkTarget">
+						{{ hasSelectedLinkSpot
+							? t('sheetmusic', 'Repick…')
+							: t('sheetmusic', 'Pick spot…') }}
+					</button>
+					<button
+						type="button"
+						:class="$style.pickSpotBtn"
+						data-test="selected-link-open-picker"
+						@click="openSelectedLinkPicker">
+						{{ t('sheetmusic', 'Side-by-side…') }}
+					</button>
+				</div>
 			</div>
 		</ViewportPopover>
 	</div>
@@ -577,6 +621,12 @@ button[type='button'].miniChipActive {
 	background: var(--color-primary-element, #0082c9);
 	color: var(--color-primary-element-text, #ffffff);
 	font-weight: 600;
+}
+
+.pickBtnRow {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 5px;
 }
 
 button[type='button'].pickSpotBtn {

@@ -30,6 +30,7 @@ export interface UseAnnotationOverlayHostOptions {
 	onJumpToPage: (payload: LinkJumpPayload) => void
 	onStartPickLinkTarget?: (req: LinkTargetPickRequest) => void
 	onCompletePickLinkTarget?: (res: LinkTargetPickResult) => void
+	onOpenLinkPicker?: (req: LinkTargetPickRequest) => void
 	onSelect: (uuid: string | null) => void
 	onSelectMany?: (uuids: string[]) => void
 	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
@@ -119,6 +120,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			onJumpToPage: (payload: LinkJumpPayload) => opts.onJumpToPage(payload),
 			onStartPickLinkTarget: opts.onStartPickLinkTarget,
 			onCompletePickLinkTarget: opts.onCompletePickLinkTarget,
+			onOpenLinkPicker: opts.onOpenLinkPicker,
 			onSelect: opts.onSelect,
 			onSelectMany: opts.onSelectMany,
 			onCreateAnnotation: opts.onCreate,

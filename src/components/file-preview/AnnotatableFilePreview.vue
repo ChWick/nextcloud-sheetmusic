@@ -7,8 +7,13 @@ import { useAnnotationLayers } from '../../composables/useAnnotationLayers'
 import type { SheetAnnotation } from '../../types/annotation'
 import type { Bookmark } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
+import SongLinkPickerModal, { type SideBySideLinkResult } from '../song-viewer/SongLinkPickerModal.vue'
 import { roundNorm } from '../../utils/annotationTransform'
-import type { LinkTargetPickRequest, LinkTargetPickResult } from '../../utils/annotationLinks'
+import {
+	buildReverseLinkDraft,
+	type LinkTargetPickRequest,
+	type LinkTargetPickResult,
+} from '../../utils/annotationLinks'
 import {
 	getCachedFileMusicFont,
 	loadFileMusicFont,
@@ -157,9 +162,15 @@ const fileSizeBytes = computed(() => filePreviewerRef.value?.fileSizeBytes ?? nu
 const pageResolutions = computed(() => filePreviewerRef.value?.pageResolutions ?? [])
 const showAnnotationsState = computed(() => filePreviewerRef.value?.showAnnotationsState ?? true)
 const linkTargetPick = ref<LinkTargetPickRequest | null>(null)
+const linkPickerRequest = ref<LinkTargetPickRequest | null>(null)
 
 function handleStartPickLinkTarget(req: LinkTargetPickRequest) {
 	linkTargetPick.value = req
+}
+
+function handleOpenLinkPicker(req: LinkTargetPickRequest) {
+	linkTargetPick.value = null
+	linkPickerRequest.value = req
 }
 
 function handlePickSelectedLinkTarget() {
@@ -167,6 +178,23 @@ function handlePickSelectedLinkTarget() {
 	if (!sel || sel.type !== 'link') return
 	linkTargetPick.value = {
 		mode: 'edit',
+		existing: sel,
+	}
+}
+
+function handleOpenSelectedLinkPicker() {
+	const sel = selectedAnnotation.value
+	if (!sel || sel.type !== 'link') return
+	linkTargetPick.value = null
+	linkPickerRequest.value = {
+		mode: 'edit',
+		sourcePageIndex: sel.pageNumber,
+		x: sel.x + (sel.width || 0.1) / 2,
+		y: sel.y + (sel.height || 0.06) / 2,
+		width: sel.width || 0.1,
+		height: sel.height || 0.06,
+		label: sel.data?.label ?? '',
+		linkStyle: sel.data?.linkStyle === 'circle' ? 'circle' : 'box',
 		existing: sel,
 	}
 }
@@ -196,8 +224,9 @@ function handleCompletePickLinkTarget(res: LinkTargetPickResult) {
 		return
 	}
 
-	const label = req.label?.trim() || `→ p. ${res.pageIndex + 1}`
-	handleCreateAnnotation({
+	const linkStyle = req.linkStyle === 'circle' ? 'circle' : 'box'
+	const label = req.label?.trim() || (linkStyle === 'circle' ? '' : `→ p. ${res.pageIndex + 1}`)
+	const forwardDraft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> = {
 		pageNumber: req.sourcePageIndex ?? Math.max(0, currentPage.value - 1),
 		layerIndex: 0,
 		type: 'link',
@@ -215,13 +244,79 @@ function handleCompletePickLinkTarget(res: LinkTargetPickResult) {
 			targetX,
 			targetY,
 			label,
+			...(linkStyle === 'circle' ? { linkStyle } : {}),
 		},
-	})
+	}
+	handleCreateAnnotation(forwardDraft)
+	if (req.createReverse) {
+		const reverseDraft = buildReverseLinkDraft(forwardDraft)
+		if (reverseDraft) handleCreateAnnotation(reverseDraft)
+	}
+}
+
+function handleSaveLinkPicker(result: SideBySideLinkResult) {
+	const req = linkPickerRequest.value
+	linkPickerRequest.value = null
+	if (!req) return
+
+	const w = roundNorm(req.width ?? (result.linkStyle === 'circle' ? 0.06 : 0.1))
+	const h = roundNorm(req.height ?? (result.linkStyle === 'circle' ? 0.06 : 0.06))
+	const boxX = roundNorm(Math.min(Math.max(0, result.sourceX - w / 2), Math.max(0, 1 - w)))
+	const boxY = roundNorm(Math.min(Math.max(0, result.sourceY - h / 2), Math.max(0, 1 - h)))
+	const targetX = roundNorm(result.targetX)
+	const targetY = roundNorm(result.targetY)
+	const label = result.label || (result.linkStyle === 'circle' ? '' : `→ p. ${result.targetPageIndex + 1}`)
+
+	if (req.mode === 'edit' && req.existing) {
+		updateAnnotation(req.existing, {
+			...req.existing,
+			pageNumber: result.sourcePageIndex,
+			x: boxX,
+			y: boxY,
+			data: {
+				...req.existing.data,
+				targetPage: result.targetPageIndex,
+				targetX,
+				targetY,
+				label,
+				linkStyle: result.linkStyle,
+			},
+		})
+		return
+	}
+
+	const forwardDraft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> = {
+		pageNumber: result.sourcePageIndex,
+		layerIndex: 0,
+		type: 'link',
+		x: boxX,
+		y: boxY,
+		width: w,
+		height: h,
+		style: {
+			color: toolStyle.value.color || '#0052cc',
+			opacity: 1,
+			fontSize: toolStyle.value.fontSize,
+		},
+		data: {
+			targetPage: result.targetPageIndex,
+			targetX,
+			targetY,
+			label,
+			...(result.linkStyle === 'circle' ? { linkStyle: 'circle' } : {}),
+		},
+	}
+	handleCreateAnnotation(forwardDraft)
+	if (result.createReverse) {
+		const reverseDraft = buildReverseLinkDraft(forwardDraft)
+		if (reverseDraft) handleCreateAnnotation(reverseDraft)
+	}
 }
 
 watch(isEditing, (editing) => {
 	if (!editing) {
 		linkTargetPick.value = null
+		linkPickerRequest.value = null
 	}
 })
 
@@ -272,6 +367,7 @@ defineExpose({
 			@update-selected-style="updateSelectedStyle"
 			@update-selected-data="updateSelectedData"
 			@pick-selected-link-target="handlePickSelectedLinkTarget"
+			@open-selected-link-picker="handleOpenSelectedLinkPicker"
 			@undo="undo"
 			@redo="redo"
 			@delete-selected="deleteSelected"
@@ -317,7 +413,26 @@ defineExpose({
 			@batch-update-annotations="batchUpdateAnnotations"
 			@delete-annotation="deleteAnnotation"
 			@start-pick-link-target="handleStartPickLinkTarget"
-			@complete-pick-link-target="handleCompletePickLinkTarget" />
+			@complete-pick-link-target="handleCompletePickLinkTarget"
+			@open-link-picker="handleOpenLinkPicker" />
+
+		<SongLinkPickerModal
+			:open="linkPickerRequest !== null"
+			:file-path="filePath"
+			:total-pages="totalPages"
+			:initial-source-page-index="linkPickerRequest?.sourcePageIndex ?? Math.max(0, currentPage - 1)"
+			:initial-source-x="linkPickerRequest?.x ?? 0.5"
+			:initial-source-y="linkPickerRequest?.y ?? 0.5"
+			:initial-target-page-index="linkPickerRequest?.existing?.data?.targetPage ?? Math.min(Math.max(0, totalPages - 1), (linkPickerRequest?.sourcePageIndex ?? 0) + 1)"
+			:initial-target-x="linkPickerRequest?.existing?.data?.targetX ?? 0.5"
+			:initial-target-y="linkPickerRequest?.existing?.data?.targetY ?? 0.2"
+			:initial-label="linkPickerRequest?.label ?? ''"
+			:initial-link-style="linkPickerRequest?.linkStyle ?? 'box'"
+			:initial-create-reverse="linkPickerRequest?.createReverse ?? false"
+			:show-reverse-option="linkPickerRequest?.mode !== 'edit'"
+			:bookmarks="bookmarks"
+			@close="linkPickerRequest = null"
+			@save="handleSaveLinkPicker" />
 	</div>
 </template>
 

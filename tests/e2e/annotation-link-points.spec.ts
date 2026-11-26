@@ -41,14 +41,46 @@ test.describe('Interactive Link Points (D.S. / Coda jumps)', () => {
 			data: { targetPage: 2, targetX: 0.5, targetY: 0.54, label: 'To Coda' },
 		}
 
-		await page.route('**/api/songs/*/annotations**', async (route) => {
+		let annotationsStore: Array<Record<string, unknown>> = [seededLink]
+		let nextAnnId = 600
+
+		await page.route('**/api/songs/*/annotations/batch**', async (route) => {
+			const payload = route.request().postDataJSON() as { upserts?: Array<Record<string, unknown>> } | null
+			const saved: Array<Record<string, unknown>> = []
+			for (const item of payload?.upserts ?? []) {
+				const existingIdx = annotationsStore.findIndex((a) => a.uuid === item.uuid)
+				const record = { id: nextAnnId++, ...item }
+				if (existingIdx >= 0) {
+					annotationsStore[existingIdx] = record
+				} else {
+					annotationsStore.push(record)
+				}
+				saved.push(record)
+			}
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
 					ocs: {
 						meta: { status: 'ok', statuscode: 200 },
-						data: [seededLink],
+						data: { saved, deletedIds: [] },
+					},
+				}),
+			})
+		})
+
+		await page.route('**/api/songs/*/annotations**', async (route) => {
+			if (route.request().url().includes('/batch')) {
+				await route.fallback()
+				return
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					ocs: {
+						meta: { status: 'ok', statuscode: 200 },
+						data: annotationsStore,
 					},
 				}),
 			})
@@ -83,18 +115,27 @@ test.describe('Interactive Link Points (D.S. / Coda jumps)', () => {
 		await page.locator('[data-test="annotation-link-preset-d-s-"]').click()
 		await expect(page.locator('[data-test="annotation-link-label-input"]')).toHaveValue('D.S.')
 
-		// Start exact point-to-point target picking, verify banner, and cancel
-		await page.locator('[data-test="annotation-link-pick-target"]').click()
-		await expect(page.locator('[data-test="link-target-pick-banner"]')).toBeVisible()
-		await page.locator('[data-test="link-target-pick-cancel"]').click()
-		await expect(page.locator('[data-test="link-target-pick-banner"]')).toBeHidden()
+		// Open side-by-side picker, choose page 3 target, Circle style, and Create reverse link
+		await page.locator('[data-test="annotation-link-open-picker"]').click()
+		const picker = page.locator('[data-test="link-picker-modal"]')
+		await expect(picker).toBeVisible()
+		await picker.locator('[data-test="link-picker-target-next"]').click()
+		await expect(picker.locator('[data-test="link-picker-target-page"]')).toContainText('Page 3 / 3')
+		await picker.locator('[data-test="link-picker-style-circle"]').click()
+		await picker.locator('[data-test="link-picker-reverse-checkbox"]').check()
+		await picker.locator('[data-test="link-picker-save"]').click()
+		await expect(picker).toBeHidden()
 
-		// Select the existing link to verify editing its target page & repicking spot via the toolbar popover
+		// Verify a circle link was created on page 1 (in addition to the seeded box link) and reverse link on page 3
+		await expect(page.locator('[data-link-style="circle"]').first()).toBeVisible()
+
+		// Select the existing link to verify editing its target page, style & picker via the toolbar popover
 		await page.getByRole('button', { name: /Select/i }).first().click()
 		await page.locator('[data-test="annotation-link"]').first().click()
 		await page.locator('[data-test="selected-link-edit-button"]').click()
 		await expect(page.locator('[data-test="selected-link-page-input"]')).toHaveValue('3')
-		await expect(page.locator('[data-test="selected-link-pick-target"]')).toBeVisible()
+		await expect(page.locator('[data-test="selected-link-style-circle"]')).toBeVisible()
+		await expect(page.locator('[data-test="selected-link-open-picker"]')).toBeVisible()
 		await page.getByRole('button', { name: 'Done' }).click()
 
 		// 2. Open Performance Mode in single-page layout so page 1 -> page 3 jump is unmistakable

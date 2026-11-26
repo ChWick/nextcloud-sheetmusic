@@ -134,6 +134,7 @@ const emit = defineEmits<{
 	'delete-annotation': [annotation: SheetAnnotation]
 	'start-pick-link-target': [req: LinkTargetPickRequest]
 	'complete-pick-link-target': [res: LinkTargetPickResult]
+	'open-link-picker': [req: LinkTargetPickRequest]
 }>()
 
 const pdfContainer = ref<HTMLElement>()
@@ -220,6 +221,7 @@ const {
 	onJumpToPage: jumpFromLink,
 	onStartPickLinkTarget: (req) => emit('start-pick-link-target', req),
 	onCompletePickLinkTarget: (res) => emit('complete-pick-link-target', res),
+	onOpenLinkPicker: (req) => emit('open-link-picker', req),
 	onSelect: (uuid) => emit('select-annotation', uuid),
 	onSelectMany: (uuids) => emit('select-annotations', uuids),
 	onCreate: (draft) => emit('create-annotation', draft),

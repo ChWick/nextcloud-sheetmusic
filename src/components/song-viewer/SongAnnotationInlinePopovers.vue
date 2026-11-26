@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
 import type { Bookmark } from '../../types/song'
-import { LINK_LABEL_PRESETS } from '../../utils/annotationLinks'
+import { LINK_LABEL_PRESETS, type LinkMarkerStyle } from '../../utils/annotationLinks'
 import { nextTick, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 
@@ -25,6 +25,8 @@ export interface PendingLinkEdit {
 	targetX?: number
 	targetY?: number
 	label: string
+	linkStyle: LinkMarkerStyle
+	createReverse: boolean
 	existing?: SheetAnnotation
 }
 
@@ -41,7 +43,10 @@ const emit = defineEmits<{
 	'update:pendingTextText': [text: string]
 	'update:pendingLinkPage': [page: number]
 	'update:pendingLinkLabel': [label: string]
+	'update:pendingLinkStyle': [style: LinkMarkerStyle]
+	'update:pendingLinkReverse': [enabled: boolean]
 	'pick-link-target': []
+	'open-link-picker': []
 	'commit-text': []
 	'cancel-text': []
 	'commit-link': []
@@ -228,13 +233,51 @@ watch(
 					{{ preset }}
 				</button>
 			</div>
-			<button
-				type="button"
-				class="sheetmusic-inline-pick-btn"
-				data-test="annotation-link-pick-target"
-				@click="emit('pick-link-target')">
-				{{ t('sheetmusic', 'Pick exact target spot on score…') }}
-			</button>
+			<div class="sheetmusic-inline-style-row">
+				<span>{{ t('sheetmusic', 'Style') }}</span>
+				<div class="sheetmusic-inline-style-btns">
+					<button
+						type="button"
+						class="sheetmusic-inline-chip"
+						:class="{ active: pendingLink.linkStyle !== 'circle' }"
+						data-test="annotation-link-style-box"
+						@click="emit('update:pendingLinkStyle', 'box')">
+						{{ t('sheetmusic', 'Box') }}
+					</button>
+					<button
+						type="button"
+						class="sheetmusic-inline-chip"
+						:class="{ active: pendingLink.linkStyle === 'circle' }"
+						data-test="annotation-link-style-circle"
+						@click="emit('update:pendingLinkStyle', 'circle')">
+						{{ t('sheetmusic', 'Circle') }}
+					</button>
+				</div>
+			</div>
+			<label v-if="pendingLink.mode !== 'edit'" class="sheetmusic-inline-checkbox">
+				<input
+					type="checkbox"
+					:checked="pendingLink.createReverse"
+					data-test="annotation-link-reverse-checkbox"
+					@change="emit('update:pendingLinkReverse', ($event.target as HTMLInputElement).checked)">
+				<span>{{ t('sheetmusic', 'Create reverse link') }}</span>
+			</label>
+			<div class="sheetmusic-inline-pick-row">
+				<button
+					type="button"
+					class="sheetmusic-inline-pick-btn"
+					data-test="annotation-link-pick-target"
+					@click="emit('pick-link-target')">
+					{{ t('sheetmusic', 'Pick on page…') }}
+				</button>
+				<button
+					type="button"
+					class="sheetmusic-inline-pick-btn"
+					data-test="annotation-link-open-picker"
+					@click="emit('open-link-picker')">
+					{{ t('sheetmusic', 'Side-by-side…') }}
+				</button>
+			</div>
 		</div>
 		<div class="sheetmusic-inline-actions">
 			<button type="button" class="sheetmusic-inline-btn" @click="emit('cancel-link')">
@@ -338,15 +381,44 @@ watch(
 	margin-bottom: 8px;
 }
 
+.sheetmusic-inline-style-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.sheetmusic-inline-style-btns {
+	display: inline-flex;
+	gap: 4px;
+}
+
+.sheetmusic-inline-checkbox {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start !important;
+	gap: 6px;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.sheetmusic-inline-pick-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 5px;
+	margin-top: 2px;
+}
+
 .sheetmusic-inline-pick-btn {
 	width: 100%;
-	margin: 2px 0 0;
-	padding: 5px 8px;
+	margin: 0;
+	padding: 5px 6px;
 	border: 1px dashed var(--color-primary-element, #0082c9);
 	border-radius: 6px;
 	background: var(--color-primary-light, #e6f4fa);
 	color: var(--color-main-text, #222222);
-	font-size: 12px;
+	font-size: 11px;
 	font-weight: 600;
 	cursor: pointer;
 	text-align: center;
