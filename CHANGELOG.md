@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-11-26
+
+### Added
+
+- **Tight On-the-Fly PDF Whitespace Cropping**: Automatic margin cropping in performance mode with aligned annotations, backed by `PdfCropService`, per-page crop-box caching on song files, upload-triggered crop jobs, and a periodic `BackfillPdfCropBoxesJob`.
+- **Annotation Layers & Performance Visibility Toggles**: Per-file annotation layers API, layer manager UI with multi-layer assignment in the editor, and per-layer visibility toggles in the play-mode top bar.
+- **Handwriting Recognition & SMuFL Music Fonts**: Handwriting recognition mode (`$P+` matching with active learning and per-user Nextcloud config persistence) for fingerings (1–9), notes, rests, and musical symbols, plus bundled Bravura, Leland, and Petaluma SMuFL fonts with per-PDF font selection, organ pedal marks, and string marks.
+- **Box-Select & Annotation Workflow Enhancements**: Multi-selection box-select tool, hover/select/move in insert modes, immediate drawing on blank tap, and a compact single-row toolbar with overflow menu.
+- **Performance Mode Controls**: Background color selector, tight-crop toggle, and a Stop button that exits play mode while preserving fullscreen.
+- **PDF Merge Workflow**: Merge and rearrange multiple song PDFs directly from the song editor, viewer, or PDF modifier with optional cleanup of original files.
+- **Batch Entity Creation & Viewer Improvements**: Create new entities inline during batch song editing, shared fullscreen file preview in setlists, and Fit-Page as the default viewer zoom mode.
+- **Nextcloud App Store Listing**: Added 8 App Store & README screenshots, `multimedia` category, documentation and donation links, and explicit PHP 8.1 / `pdo_sqlite` dependencies.
+
+### Fixed
+
+- **Stylus, Palm Rejection & Touch Ergonomics**: Improved palm-jitter filtering, pen proximity suppression, stamp hit-target precision, and prevented accidental inline table edits on touch-primary devices.
+- **PWA Update & Caching Reliability**: Bypassed immutable HTTP cache headers for entry assets in the service worker and improved compressed download progress handling.
+- **Annotation & Toolbar Layout**: Kept annotations below play-mode toolbars, debounced style slider saves, and stabilized toolbar button widths against Nextcloud core CSS overrides.
+
 ## [0.0.3-rc7] - 2026-11-22
 
 ### Added
