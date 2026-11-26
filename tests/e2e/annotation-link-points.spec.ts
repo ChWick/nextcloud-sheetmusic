@@ -129,9 +129,10 @@ test.describe('Interactive Link Points (D.S. / Coda jumps)', () => {
 		// Verify a circle link was created on page 1 (in addition to the seeded box link) and reverse link on page 3
 		await expect(page.locator('[data-link-style="circle"]').first()).toBeVisible()
 
-		// Select the existing link to verify editing its target page, style & picker via the toolbar popover
+		// Select the existing link to verify target highlight marker on page 3 and toolbar editing
 		await page.getByRole('button', { name: /Select/i }).first().click()
 		await page.locator('[data-test="annotation-link"]').first().click()
+		await expect(page.locator('[data-test="selected-link-target-marker"]')).toBeAttached()
 		await page.locator('[data-test="selected-link-edit-button"]').click()
 		await expect(page.locator('[data-test="selected-link-page-input"]')).toHaveValue('3')
 		await expect(page.locator('[data-test="selected-link-style-circle"]')).toBeVisible()

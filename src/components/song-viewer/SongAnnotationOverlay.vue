@@ -2,7 +2,13 @@
 import type { SheetAnnotation } from '../../types/annotation'
 import type { Bookmark } from '../../types/song'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
-import type { LinkArrivalBeacon, LinkJumpPayload, LinkTargetPickRequest, LinkTargetPickResult } from '../../utils/annotationLinks'
+import {
+	clampNormalizedCoord,
+	type LinkArrivalBeacon,
+	type LinkJumpPayload,
+	type LinkTargetPickRequest,
+	type LinkTargetPickResult,
+} from '../../utils/annotationLinks'
 import type { MusicFontId } from '../../utils/musicFont'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { generateSmoothSvgPath, getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
@@ -184,6 +190,25 @@ const displayedAnnotations = computed(() => {
 	return list
 })
 
+const selectedLinkTarget = computed(() => {
+	if (!props.editable || !props.selectedUuid) return null
+	const sel = props.annotations.find(
+		(a) => !a.deletedAt && a.uuid === props.selectedUuid && a.type === 'link',
+	)
+	if (!sel || sel.data?.targetPage !== pageIndex.value) return null
+	const tx = clampNormalizedCoord(sel.data?.targetX)
+	const ty = clampNormalizedCoord(sel.data?.targetY)
+	if (tx === undefined || ty === undefined) return null
+	const samePage = sel.pageNumber === pageIndex.value
+	return {
+		x: tx,
+		y: ty,
+		samePage,
+		sourceX: samePage ? sel.x + (sel.width || 0.1) / 2 : 0,
+		sourceY: samePage ? sel.y + (sel.height || 0.06) / 2 : 0,
+	}
+})
+
 const handwritingPreviewPath = computed(() => {
 	const strokes = [
 		...handwritingPendingStrokes.value,
@@ -257,7 +282,7 @@ function handleOpenLinkPicker() {
 
 <template>
 	<div
-		v-if="(visible && (displayedAnnotations.length > 0 || editable)) || (linkBeacon && linkBeacon.pageNumber === pageNumber) || pickingLinkTarget"
+		v-if="(visible && (displayedAnnotations.length > 0 || editable)) || (linkBeacon && linkBeacon.pageNumber === pageNumber) || pickingLinkTarget || Boolean(selectedLinkTarget)"
 		class="sheetmusic-annotation-layer">
 		<svg
 			ref="svgRef"
@@ -316,6 +341,33 @@ function handleOpenLinkPicker() {
 				:vb-height="vbHeight"
 				:ui-scale="uiScale"
 				:show-handles="selectedItems.length === 1" />
+
+			<g
+				v-if="selectedLinkTarget"
+				class="sheetmusic-selected-link-target"
+				pointer-events="none"
+				data-test="selected-link-target-marker">
+				<line
+					v-if="selectedLinkTarget.samePage"
+					:x1="selectedLinkTarget.sourceX * VIEWBOX_WIDTH"
+					:y1="selectedLinkTarget.sourceY * vbHeight"
+					:x2="selectedLinkTarget.x * VIEWBOX_WIDTH"
+					:y2="selectedLinkTarget.y * vbHeight"
+					stroke="#e65100"
+					:stroke-width="2 * uiScale"
+					:stroke-dasharray="`${6 * uiScale}, ${4 * uiScale}`"
+					opacity="0.75" />
+				<circle
+					:cx="selectedLinkTarget.x * VIEWBOX_WIDTH"
+					:cy="selectedLinkTarget.y * vbHeight"
+					:r="20 * uiScale"
+					class="sheetmusic-selected-link-target-ring" />
+				<circle
+					:cx="selectedLinkTarget.x * VIEWBOX_WIDTH"
+					:cy="selectedLinkTarget.y * vbHeight"
+					:r="6 * uiScale"
+					class="sheetmusic-selected-link-target-core" />
+			</g>
 
 			<g
 				v-if="linkBeacon && linkBeacon.pageNumber === pageNumber"
@@ -461,6 +513,16 @@ function handleOpenLinkPicker() {
 	stroke: #0082c9;
 	cursor: ns-resize;
 	pointer-events: auto;
+}
+
+.sheetmusic-selected-link-target-ring {
+	fill: rgba(230, 81, 0, 0.18);
+	stroke: #e65100;
+	stroke-width: 2.5;
+}
+
+.sheetmusic-selected-link-target-core {
+	fill: #e65100;
 }
 
 .sheetmusic-link-beacon-ring {

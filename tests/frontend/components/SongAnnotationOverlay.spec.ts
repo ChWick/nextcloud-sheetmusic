@@ -220,6 +220,37 @@ describe('SongAnnotationOverlay.vue', () => {
 		}]])
 	})
 
+	it('highlights the target point on the destination page when a link is selected in edit mode', () => {
+		const link: SheetAnnotation = {
+			id: 99,
+			uuid: 'link-target-test',
+			songId: 1,
+			fileId: 1,
+			pageNumber: 0,
+			type: 'link',
+			x: 0.2,
+			y: 0.2,
+			width: 0.1,
+			height: 0.06,
+			style: { color: '#0052cc', opacity: 1 },
+			data: { targetPage: 2, targetX: 0.65, targetY: 0.4, label: 'To Coda' },
+		}
+
+		// Mount overlay for destination page 3 (1-indexed) with no annotations of its own
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [link],
+				pageNumber: 3,
+				visible: true,
+				editable: true,
+				selectedUuid: 'link-target-test',
+			},
+		})
+
+		const marker = wrapper.find('[data-test="selected-link-target-marker"]')
+		expect(marker.exists()).toBe(true)
+	})
+
 	it('hides all markings when visible prop is false', () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
