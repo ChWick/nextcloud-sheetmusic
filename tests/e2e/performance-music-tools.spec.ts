@@ -102,26 +102,29 @@ test.describe('Performance Mode Metronome & Pitch Pipe', () => {
 		await expect(dialog).toHaveAttribute('data-night-chrome', 'true')
 		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'night')
 
-		// Open Viewer Settings to switch to Warm Night, dim brightness to 70%, and dial sepia to 60%
-		await dialog.getByRole('button', { name: 'Viewer settings' }).click()
-		await dialog.locator('[data-test="performance-score-mode-night-sepia"]').click()
+		// Open appearance popover right from the Night Mode split button arrow (no need for full Viewer Settings!)
+		await dialog.locator('[data-test="performance-bottom-night-toggle-menu"]').click()
+		const appearancePopover = dialog.locator('[data-test="score-appearance-popover"]')
+		await expect(appearancePopover).toBeVisible()
+		await appearancePopover.locator('[data-test="popover-score-mode-night-sepia"]').click()
 		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'night-sepia')
 
-		const brightnessSlider = dialog.locator('[data-test="performance-score-brightness"]')
-		await brightnessSlider.fill('70')
-		await expect(dialog.locator('[data-test="performance-score-brightness-value"]')).toHaveText('70%')
+		await appearancePopover.locator('[data-test="popover-score-brightness"]').fill('70')
+		await expect(appearancePopover.locator('[data-test="popover-score-brightness-value"]')).toHaveText('70%')
 		await expect(pdfContainer).toHaveAttribute('data-score-brightness', '70')
 
-		const sepiaSlider = dialog.locator('[data-test="performance-score-sepia"]')
-		await sepiaSlider.fill('60')
-		await expect(dialog.locator('[data-test="performance-score-sepia-value"]')).toHaveText('60%')
+		await appearancePopover.locator('[data-test="popover-score-sepia"]').fill('60')
+		await expect(appearancePopover.locator('[data-test="popover-score-sepia-value"]')).toHaveText('60%')
 		await expect(pdfContainer).toHaveAttribute('data-score-sepia', '60')
 
-		// Close settings panel and exit -> regular Song Viewer reflects the persisted night appearance
-		await dialog.getByRole('region', { name: 'Viewer settings' }).getByRole('button', { name: 'Close' }).click()
+		// Close popover and exit -> regular Song Viewer reflects persisted night appearance and exposes split menu too
+		await appearancePopover.getByRole('button', { name: 'Close' }).click()
 		await dialog.locator('[data-test="stop-performance-button"]').click()
 		const viewerNightBtn = page.locator('[data-test="viewer-night-mode-button"]')
 		await expect(viewerNightBtn).toHaveAttribute('aria-pressed', 'true')
+		await page.locator('[data-test="viewer-night-mode-button-menu"]').click()
+		await expect(page.locator('[data-test="score-appearance-popover"]')).toBeVisible()
+		await page.locator('[data-test="score-appearance-popover"]').getByRole('button', { name: 'Close' }).click()
 
 		// Reopen performance mode -> settings persist
 		await page.locator('[data-test="play-song-button"]').click()

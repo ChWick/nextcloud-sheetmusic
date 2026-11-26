@@ -104,14 +104,40 @@ function loadScoreAppearance() {
 	scoreSepia.value = s.scoreSepia
 }
 
+function persistViewerScoreAppearance() {
+	if (props.libraryId <= 0) return
+	const store = createLibraryPerformanceStore(props.libraryId)
+	store.save({
+		...store.get(),
+		scoreColorMode: scoreColorMode.value,
+		scoreBrightness: scoreBrightness.value,
+		scoreSepia: scoreSepia.value,
+	})
+}
+
+function updateViewerScoreColorMode(mode: ScoreColorMode) {
+	scoreColorMode.value = mode
+	scoreSepia.value = getDefaultSepiaForMode(mode)
+	persistViewerScoreAppearance()
+}
+
 function toggleViewerNightMode() {
-	const nextMode: ScoreColorMode = isNightScoreMode(scoreColorMode.value) ? 'normal' : 'night'
-	scoreColorMode.value = nextMode
-	scoreSepia.value = getDefaultSepiaForMode(nextMode)
-	if (props.libraryId > 0) {
-		const store = createLibraryPerformanceStore(props.libraryId)
-		store.save({ ...store.get(), scoreColorMode: nextMode, scoreSepia: scoreSepia.value })
+	updateViewerScoreColorMode(isNightScoreMode(scoreColorMode.value) ? 'normal' : 'night')
+}
+
+function updateViewerScoreBrightness(brightness: number) {
+	scoreBrightness.value = brightness
+	persistViewerScoreAppearance()
+}
+
+function updateViewerScoreSepia(sepia: number) {
+	scoreSepia.value = sepia
+	if (isNightScoreMode(scoreColorMode.value)) {
+		scoreColorMode.value = sepia > 0 ? 'night-sepia' : 'night'
+	} else {
+		scoreColorMode.value = sepia > 0 ? 'sepia' : 'normal'
 	}
+	persistViewerScoreAppearance()
 }
 
 watch(() => props.libraryId, loadScoreAppearance, { immediate: true })
@@ -393,6 +419,9 @@ defineExpose({
 				@merge-pdfs="isMergePdfsModalOpen = true"
 				@open-versions="openVersionsModal"
 				@toggle-night-mode="toggleViewerNightMode"
+				@update:score-color-mode="updateViewerScoreColorMode"
+				@update:score-brightness="updateViewerScoreBrightness"
+				@update:score-sepia="updateViewerScoreSepia"
 				@toggle-fullscreen="toggleAnnotationFullscreen"
 				@jump-to-bookmark="jumpToBookmark"
 				@edit-bookmarks="openPdfModifier('bookmarks')">

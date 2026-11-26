@@ -19,10 +19,11 @@ import History from 'vue-material-design-icons/History.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
-import WeatherNightIcon from 'vue-material-design-icons/WeatherNight.vue'
 import PdfInfoPopover from '../song-pdf/PdfInfoPopover.vue'
+import NightModeSplitButton from './NightModeSplitButton.vue'
 import SongViewerBookmarksBar from './SongViewerBookmarksBar.vue'
 import { getFileName, getPdfFiles } from '../../utils/file'
+import type { ScoreColorMode } from '../../utils/performance-settings'
 import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
 const props = withDefaults(
@@ -36,7 +37,9 @@ const props = withDefaults(
 		pageResolutions?: PdfPageResolutionSummary[]
 		showAnnotations?: boolean
 		isEditingAnnotations?: boolean
-		isNightMode?: boolean
+		scoreColorMode?: ScoreColorMode
+		scoreBrightness?: number
+		scoreSepia?: number
 		isFullscreen?: boolean
 		canWrite?: boolean
 		bookmarks?: Bookmark[]
@@ -57,7 +60,9 @@ const props = withDefaults(
 		pageResolutions: () => [],
 		showAnnotations: true,
 		isEditingAnnotations: false,
-		isNightMode: false,
+		scoreColorMode: 'normal',
+		scoreBrightness: 100,
+		scoreSepia: 0,
 		isFullscreen: false,
 		canWrite: true,
 		bookmarks: () => [],
@@ -83,6 +88,9 @@ const emit = defineEmits<{
 	'toggle-annotations': []
 	'toggle-edit-annotations': []
 	'toggle-night-mode': []
+	'update:scoreColorMode': [mode: ScoreColorMode]
+	'update:scoreBrightness': [brightness: number]
+	'update:scoreSepia': [sepia: number]
 	'toggle-fullscreen': []
 	'jump-to-bookmark': [pageNum: number]
 	'edit-bookmarks': []
@@ -196,18 +204,16 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 					<DrawIcon :size="20" />
 				</template>
 			</NcButton>
-			<NcButton
+			<NightModeSplitButton
 				v-if="isPdf"
-				:variant="isNightMode ? 'primary' : 'secondary'"
-				:aria-pressed="isNightMode"
-				:title="t('sheetmusic', 'Toggle night score inversion')"
-				:aria-label="t('sheetmusic', 'Night score mode')"
-				data-test="viewer-night-mode-button"
-				@click="emit('toggle-night-mode')">
-				<template #icon>
-					<WeatherNightIcon :size="20" />
-				</template>
-			</NcButton>
+				:score-color-mode="scoreColorMode"
+				:score-brightness="scoreBrightness"
+				:score-sepia="scoreSepia"
+				toggle-test-id="viewer-night-mode-button"
+				@toggle-night-mode="emit('toggle-night-mode')"
+				@update:score-color-mode="emit('update:scoreColorMode', $event)"
+				@update:score-brightness="emit('update:scoreBrightness', $event)"
+				@update:score-sepia="emit('update:scoreSepia', $event)" />
 			<NcButton
 				:variant="isFullscreen ? 'primary' : 'secondary'"
 				:title="fullscreenLabel"

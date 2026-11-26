@@ -11,10 +11,10 @@ import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import ViewGridOutlineIcon from 'vue-material-design-icons/ViewGridOutline.vue'
-import WeatherNightIcon from 'vue-material-design-icons/WeatherNight.vue'
 import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
+import NightModeSplitButton from '../song-viewer/NightModeSplitButton.vue'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
-import { isNightScoreMode, type PerformanceLayoutChoice, type PerformanceZoomChoice, type ScoreColorMode } from '../../utils/performance-settings'
+import type { PerformanceLayoutChoice, PerformanceZoomChoice, ScoreColorMode } from '../../utils/performance-settings'
 
 withDefaults(defineProps<{
 	visible: boolean
@@ -31,6 +31,8 @@ withDefaults(defineProps<{
 	interleaveSongs?: boolean
 	tightCrop?: boolean
 	scoreColorMode?: ScoreColorMode
+	scoreBrightness?: number
+	scoreSepia?: number
 	isPagePickerOpen?: boolean
 	isDrawerOpen?: boolean
 	showSetlistControls?: boolean
@@ -38,6 +40,8 @@ withDefaults(defineProps<{
 	interleaveSongs: false,
 	tightCrop: false,
 	scoreColorMode: 'normal',
+	scoreBrightness: 100,
+	scoreSepia: 0,
 	isPagePickerOpen: false,
 	isDrawerOpen: false,
 	showSetlistControls: true,
@@ -54,6 +58,10 @@ const emit = defineEmits<{
 	toggleInterleave: []
 	toggleTightCrop: []
 	toggleNightMode: []
+	'update:scoreColorMode': [mode: ScoreColorMode]
+	'update:scoreBrightness': [brightness: number]
+	'update:scoreSepia': [sepia: number]
+	'update:appearancePopoverOpen': [open: boolean]
 	togglePagePicker: []
 	toggleDrawer: []
 	pauseAutoHide: []
@@ -180,16 +188,17 @@ const emit = defineEmits<{
 				<template #icon><CropIcon :size="18" /></template>
 			</NcButton>
 
-			<NcButton
-				:variant="isNightScoreMode(scoreColorMode) ? 'primary' : 'secondary'"
+			<NightModeSplitButton
 				size="small"
-				:aria-pressed="isNightScoreMode(scoreColorMode)"
-				:aria-label="t('sheetmusic', 'Night score mode')"
-				:title="t('sheetmusic', 'Toggle night score inversion')"
-				data-test="performance-bottom-night-toggle"
-				@click="emit('toggleNightMode')">
-				<template #icon><WeatherNightIcon :size="18" /></template>
-			</NcButton>
+				:score-color-mode="scoreColorMode"
+				:score-brightness="scoreBrightness"
+				:score-sepia="scoreSepia"
+				toggle-test-id="performance-bottom-night-toggle"
+				@toggle-night-mode="emit('toggleNightMode')"
+				@update:score-color-mode="emit('update:scoreColorMode', $event)"
+				@update:score-brightness="emit('update:scoreBrightness', $event)"
+				@update:score-sepia="emit('update:scoreSepia', $event)"
+				@update:open="emit('update:appearancePopoverOpen', $event)" />
 
 			<NcButton
 				variant="secondary"

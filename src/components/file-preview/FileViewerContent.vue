@@ -5,7 +5,7 @@ import SongViewerFileToolbar from '../song-viewer/SongViewerFileToolbar.vue'
 import type { AnnotationEditorContext } from '../../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../../types/annotation'
 import type { Bookmark, SongFile } from '../../types/song'
-import { isNightScoreMode, type ScoreColorMode } from '../../utils/performance-settings'
+import type { ScoreColorMode } from '../../utils/performance-settings'
 
 const props = withDefaults(defineProps<{
 	file: Pick<SongFile, 'id' | 'path'> & { fileSize?: number | null }
@@ -66,6 +66,9 @@ const emit = defineEmits<{
 	'merge-pdfs': []
 	'open-versions': []
 	'toggle-night-mode': []
+	'update:scoreColorMode': [mode: ScoreColorMode]
+	'update:scoreBrightness': [brightness: number]
+	'update:scoreSepia': [sepia: number]
 	'toggle-fullscreen': []
 	'jump-to-bookmark': [pageNum: number]
 	'edit-bookmarks': []
@@ -103,7 +106,9 @@ defineExpose({
 			:page-resolutions="previewRef?.pageResolutions ?? []"
 			:show-annotations="previewRef?.showAnnotationsState ?? true"
 			:is-editing-annotations="isEditingAnnotations"
-			:is-night-mode="isNightScoreMode(scoreColorMode)"
+			:score-color-mode="scoreColorMode"
+			:score-brightness="scoreBrightness"
+			:score-sepia="scoreSepia"
 			:is-fullscreen="isFullscreen"
 			:can-write="canWrite"
 			:bookmarks="bookmarks"
@@ -125,6 +130,9 @@ defineExpose({
 			@toggle-annotations="previewRef?.toggleAnnotations()"
 			@toggle-edit-annotations="previewRef?.toggleEditMode()"
 			@toggle-night-mode="emit('toggle-night-mode')"
+			@update:score-color-mode="emit('update:scoreColorMode', $event)"
+			@update:score-brightness="emit('update:scoreBrightness', $event)"
+			@update:score-sepia="emit('update:scoreSepia', $event)"
 			@toggle-fullscreen="emit('toggle-fullscreen')"
 			@jump-to-bookmark="emit('jump-to-bookmark', $event)"
 			@edit-bookmarks="emit('edit-bookmarks')" />

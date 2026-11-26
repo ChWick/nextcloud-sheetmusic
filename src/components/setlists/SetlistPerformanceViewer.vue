@@ -88,6 +88,7 @@ const isSettingsOpen = ref(false)
 const isSupplementalDrawerOpen = ref(false)
 const isPagePickerOpen = ref(false)
 const isToolsPopoverOpen = ref(false)
+const isAppearancePopoverOpen = ref(false)
 const isFullscreen = ref(typeof document !== 'undefined' && Boolean(document.fullscreenElement))
 let keepFullscreenOnUnmount = false
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
@@ -122,7 +123,8 @@ const {
 	|| isSettingsOpen.value
 	|| isSupplementalDrawerOpen.value
 	|| isPagePickerOpen.value
-	|| isToolsPopoverOpen.value,
+	|| isToolsPopoverOpen.value
+	|| isAppearancePopoverOpen.value,
 )
 
 useWakeLock()
@@ -729,6 +731,8 @@ onUnmounted(() => {
 				:interleave-songs="interleaveSongs"
 				:tight-crop="tightCrop"
 				:score-color-mode="scoreColorMode"
+				:score-brightness="scoreBrightness"
+				:score-sepia="scoreSepia"
 				:is-page-picker-open="isPagePickerOpen"
 				:is-drawer-open="isDrawerOpen"
 				:show-setlist-controls="!isSingleSongMode"
@@ -742,6 +746,10 @@ onUnmounted(() => {
 				@toggle-interleave="onToggleInterleave"
 				@toggle-tight-crop="onUpdateTightCrop(!tightCrop)"
 				@toggle-night-mode="onToggleNightMode"
+				@update:score-color-mode="onUpdateScoreColorMode"
+				@update:score-brightness="onUpdateScoreBrightness"
+				@update:score-sepia="onUpdateScoreSepia"
+				@update:appearance-popover-open="isAppearancePopoverOpen = $event"
 				@toggle-page-picker="isPagePickerOpen = !isPagePickerOpen"
 				@toggle-drawer="toggleDrawer"
 				@pause-auto-hide="pauseHudAutoHide"
