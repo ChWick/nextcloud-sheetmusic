@@ -97,6 +97,66 @@ export function resolveLinkColors(rawColor?: string | null): ResolvedLinkColors 
 
 export type LinkAnnotationDraft = Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>
 
+export interface BuildLinkDraftInput {
+	sourcePageIndex: number
+	x: number
+	y: number
+	width: number
+	height: number
+	targetPageIndex: number
+	targetX?: number
+	targetY?: number
+	label?: string
+	linkStyle?: LinkMarkerStyle
+	color?: string
+	fontSize?: number
+	layerIndex?: number
+}
+
+function roundCoord(v: number): number {
+	return Math.round(v * 10000) / 10000
+}
+
+/**
+ * Resolve a display label for a link annotation.
+ * Box links default to "→ p. N" when empty; circle links remain unlabeled unless text is given.
+ */
+export function resolveLinkLabel(rawLabel: string | undefined, targetPageIndex: number, linkStyle: LinkMarkerStyle): string {
+	const trimmed = rawLabel?.trim() ?? ''
+	if (trimmed) return trimmed
+	return linkStyle === 'circle' ? '' : `→ p. ${targetPageIndex + 1}`
+}
+
+/**
+ * Build a normalized link annotation draft with consistent defaults for style, label, and coordinates.
+ */
+export function buildLinkAnnotationDraft(input: BuildLinkDraftInput): LinkAnnotationDraft {
+	const linkStyle: LinkMarkerStyle = input.linkStyle === 'circle' ? 'circle' : 'box'
+	const tx = clampNormalizedCoord(input.targetX)
+	const ty = clampNormalizedCoord(input.targetY)
+
+	return {
+		pageNumber: Math.max(0, input.sourcePageIndex),
+		layerIndex: input.layerIndex ?? 0,
+		type: 'link',
+		x: roundCoord(input.x),
+		y: roundCoord(input.y),
+		width: roundCoord(input.width),
+		height: roundCoord(input.height),
+		style: {
+			color: input.color || DEFAULT_LINK_COLOR,
+			opacity: 1,
+			fontSize: input.fontSize,
+		},
+		data: {
+			targetPage: Math.max(0, input.targetPageIndex),
+			label: resolveLinkLabel(input.label, input.targetPageIndex, linkStyle),
+			...(linkStyle === 'circle' ? { linkStyle } : {}),
+			...(tx !== undefined && ty !== undefined ? { targetX: roundCoord(tx), targetY: roundCoord(ty) } : {}),
+		},
+	}
+}
+
 /**
  * Build a paired reverse link at the destination pointing back to the source link.
  * Returns null if source and target are on the same page.
@@ -120,17 +180,27 @@ export function buildReverseLinkDraft(forward: LinkAnnotationDraft): LinkAnnotat
 		pageNumber: targetPage,
 		layerIndex: forward.layerIndex ?? 0,
 		type: 'link',
-		x: Math.round(revX * 10000) / 10000,
-		y: Math.round(revY * 10000) / 10000,
+		x: roundCoord(revX),
+		y: roundCoord(revY),
 		width: w,
 		height: h,
 		style: { ...forward.style },
 		data: {
 			targetPage: forward.pageNumber,
-			targetX: Math.round(sourceCenterX * 10000) / 10000,
-			targetY: Math.round(sourceCenterY * 10000) / 10000,
+			targetX: roundCoord(sourceCenterX),
+			targetY: roundCoord(sourceCenterY),
 			label: linkStyle === 'circle' ? '' : `← p. ${forward.pageNumber + 1}`,
 			linkStyle,
 		},
 	}
+}
+
+/**
+ * Build the forward link draft and, when requested and cross-page, its paired reverse link.
+ */
+export function buildLinkDrafts(input: BuildLinkDraftInput, createReverse: boolean): LinkAnnotationDraft[] {
+	const forward = buildLinkAnnotationDraft(input)
+	if (!createReverse) return [forward]
+	const reverse = buildReverseLinkDraft(forward)
+	return reverse ? [forward, reverse] : [forward]
 }

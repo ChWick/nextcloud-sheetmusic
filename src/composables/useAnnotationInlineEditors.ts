@@ -9,7 +9,7 @@ import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import type { PendingLinkEdit, PendingTextEdit } from '../components/song-viewer/SongAnnotationInlinePopovers.vue'
 import { ref } from 'vue'
 import { roundNorm } from '../utils/annotationTransform'
-import { buildReverseLinkDraft } from '../utils/annotationLinks'
+import { buildLinkDrafts, resolveLinkLabel } from '../utils/annotationLinks'
 
 export interface UseAnnotationInlineEditorsOptions {
 	pageIndex: ComputedRef<number>
@@ -134,7 +134,7 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 		pendingLink.value = null
 		const targetZeroIndexed = Math.max(0, Math.min(opts.totalPages.value - 1, pending.targetPageOneIndexed - 1))
 		const linkStyle = pending.linkStyle === 'circle' ? 'circle' : 'box'
-		const label = pending.label.trim() || (linkStyle === 'circle' ? '' : `→ p. ${targetZeroIndexed + 1}`)
+		const label = resolveLinkLabel(pending.label, targetZeroIndexed, linkStyle)
 		const targetCoords = pending.targetX !== undefined && pending.targetY !== undefined
 			? { targetX: roundNorm(pending.targetX), targetY: roundNorm(pending.targetY) }
 			: {}
@@ -147,27 +147,23 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 			return
 		}
 
-		const forwardDraft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> = {
-			pageNumber: opts.pageIndex.value,
-			layerIndex: 0,
-			type: 'link',
-			x: roundNorm(pending.x),
-			y: roundNorm(pending.y),
-			width: roundNorm(pending.width),
-			height: roundNorm(pending.height),
-			style: {
-				color: opts.toolStyle.value.color || '#0052cc',
-				opacity: 1,
-				fontSize: opts.toolStyle.value.fontSize,
-			},
-			data: { targetPage: targetZeroIndexed, label, ...(linkStyle === 'circle' ? { linkStyle } : {}), ...targetCoords },
-		}
-		opts.onCreate(forwardDraft)
-		if (pending.createReverse) {
-			const reverseDraft = buildReverseLinkDraft(forwardDraft)
-			if (reverseDraft) {
-				opts.onCreate(reverseDraft)
-			}
+		const drafts = buildLinkDrafts({
+			sourcePageIndex: opts.pageIndex.value,
+			x: pending.x,
+			y: pending.y,
+			width: pending.width,
+			height: pending.height,
+			targetPageIndex: targetZeroIndexed,
+			targetX: pending.targetX,
+			targetY: pending.targetY,
+			label: pending.label,
+			linkStyle,
+			color: opts.toolStyle.value.color,
+			fontSize: opts.toolStyle.value.fontSize,
+		}, pending.createReverse)
+
+		for (const draft of drafts) {
+			opts.onCreate(draft)
 		}
 	}
 
