@@ -39,10 +39,13 @@ import type { DoublePageTurnMode } from '../../utils/page-turn'
 import {
 	createLibraryPerformanceStore,
 	createSetlistPerformanceStore,
+	getEffectiveStageBackground,
+	isNightScoreMode,
 	loadEffectivePerformanceSettings,
 	type PerformanceLayoutChoice,
 	type PerformanceViewerSettings,
 	type PerformanceZoomChoice,
+	type ScoreColorMode,
 } from '../../utils/performance-settings'
 
 const props = withDefaults(defineProps<{
@@ -91,6 +94,11 @@ const showAnnotations = ref(initialSettings.settings.showAnnotations)
 const interleaveSongs = ref(initialSettings.settings.interleaveSongs)
 const backgroundColor = ref(initialSettings.settings.backgroundColor)
 const tightCrop = ref(initialSettings.settings.tightCrop)
+const scoreColorMode = ref<ScoreColorMode>(initialSettings.settings.scoreColorMode)
+const scoreBrightness = ref(initialSettings.settings.scoreBrightness)
+const effectiveOverlayBackground = computed(() =>
+	getEffectiveStageBackground(backgroundColor.value, scoreColorMode.value),
+)
 
 const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layoutChoice)
 const doublePageTurnMode = ref<DoublePageTurnMode>(initialSettings.settings.doublePageTurnMode)
@@ -125,6 +133,8 @@ function currentViewerSettings(): PerformanceViewerSettings {
 		interleaveSongs: interleaveSongs.value,
 		backgroundColor: backgroundColor.value,
 		tightCrop: tightCrop.value,
+		scoreColorMode: scoreColorMode.value,
+		scoreBrightness: scoreBrightness.value,
 	}
 }
 
@@ -159,6 +169,8 @@ function applySettingsToPreviewer(settings: PerformanceViewerSettings) {
 	interleaveSongs.value = settings.interleaveSongs
 	backgroundColor.value = settings.backgroundColor
 	tightCrop.value = settings.tightCrop
+	scoreColorMode.value = settings.scoreColorMode
+	scoreBrightness.value = settings.scoreBrightness
 }
 
 function toggleSetlistOverride(enabled: boolean) {
@@ -434,6 +446,20 @@ function onUpdateTightCrop(enabled: boolean) {
 	persistCurrentSettings()
 }
 
+function onUpdateScoreColorMode(mode: ScoreColorMode) {
+	scoreColorMode.value = mode
+	persistCurrentSettings()
+}
+
+function onToggleNightMode() {
+	onUpdateScoreColorMode(isNightScoreMode(scoreColorMode.value) ? 'normal' : 'night')
+}
+
+function onUpdateScoreBrightness(brightness: number) {
+	scoreBrightness.value = brightness
+	persistCurrentSettings()
+}
+
 function onZoomToggle() {
 	const next = zoomChoice.value === 'fit-page' ? 'fit-width' : 'fit-page'
 	zoomChoice.value = next
@@ -529,7 +555,7 @@ onUnmounted(() => {
 		<div
 			ref="rootRef"
 			:class="$style.overlay"
-			:style="backgroundColor ? { backgroundColor } : undefined"
+			:style="effectiveOverlayBackground ? { backgroundColor: effectiveOverlayBackground } : undefined"
 			role="dialog"
 			aria-modal="true"
 			:aria-label="setlistName || currentSongTitle">
@@ -637,6 +663,8 @@ onUnmounted(() => {
 					:interleave-songs="interleaveSongs"
 					:background-color="backgroundColor"
 					:tight-crop="tightCrop"
+					:score-color-mode="scoreColorMode"
+					:score-brightness="scoreBrightness"
 					:file-id="currentFile?.fileId"
 					:initial-crop-boxes="currentFile?.cropBoxes ?? null"
 					:next-file-id="nextFile?.fileId"
@@ -682,6 +710,7 @@ onUnmounted(() => {
 				:zoom-choice="zoomChoice"
 				:interleave-songs="interleaveSongs"
 				:tight-crop="tightCrop"
+				:score-color-mode="scoreColorMode"
 				:is-page-picker-open="isPagePickerOpen"
 				:is-drawer-open="isDrawerOpen"
 				:show-setlist-controls="!isSingleSongMode"
@@ -694,6 +723,7 @@ onUnmounted(() => {
 				@toggle-zoom="onZoomToggle"
 				@toggle-interleave="onToggleInterleave"
 				@toggle-tight-crop="onUpdateTightCrop(!tightCrop)"
+				@toggle-night-mode="onToggleNightMode"
 				@toggle-page-picker="isPagePickerOpen = !isPagePickerOpen"
 				@toggle-drawer="toggleDrawer"
 				@pause-auto-hide="pauseHudAutoHide"
@@ -715,10 +745,14 @@ onUnmounted(() => {
 				:is-setlist-override="isSetlistOverride"
 				:background-color="backgroundColor"
 				:tight-crop="tightCrop"
+				:score-color-mode="scoreColorMode"
+				:score-brightness="scoreBrightness"
 				@close="toggleSettingsPanel"
 				@update:is-setlist-override="toggleSetlistOverride"
 				@update:background-color="onUpdateBackgroundColor"
 				@update:tight-crop="onUpdateTightCrop"
+				@update:score-color-mode="onUpdateScoreColorMode"
+				@update:score-brightness="onUpdateScoreBrightness"
 				@save-as-library-default="saveCurrentAsLibraryDefault" />
 
 			<SetlistPerformanceSupplementalDrawer

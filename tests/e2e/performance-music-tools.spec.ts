@@ -89,4 +89,35 @@ test.describe('Performance Mode Metronome & Pitch Pipe', () => {
 		await expect(page.locator('[data-test="pitch-pipe-panel"]')).toBeHidden()
 		await expect(page.locator('[data-test="stop-performance-button"]')).toBeVisible()
 	})
+
+	test('toggles night score inversion, warm night tint, and dimming brightness with persistence', async ({ page }) => {
+		const dialog = page.getByRole('dialog', { name: 'Symphony No. 5' })
+		const pdfContainer = dialog.locator('[data-test="pdf-viewer-container"]')
+		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'normal')
+
+		// 1-tap Night Mode toggle in bottom bar activates dark stage + inverted score
+		const nightToggle = dialog.locator('[data-test="performance-bottom-night-toggle"]')
+		await nightToggle.click()
+		await expect(nightToggle).toHaveAttribute('aria-pressed', 'true')
+		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'night')
+
+		// Open Viewer Settings to switch to Warm Night and dim brightness to 70%
+		await dialog.getByRole('button', { name: 'Viewer settings' }).click()
+		await dialog.locator('[data-test="performance-score-mode-night-sepia"]').click()
+		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'night-sepia')
+
+		const brightnessSlider = dialog.locator('[data-test="performance-score-brightness"]')
+		await brightnessSlider.fill('70')
+		await expect(dialog.locator('[data-test="performance-score-brightness-value"]')).toHaveText('70%')
+		await expect(pdfContainer).toHaveAttribute('data-score-brightness', '70')
+
+		// Close settings panel, then exit and reopen performance mode -> settings persist
+		await dialog.getByRole('region', { name: 'Viewer settings' }).getByRole('button', { name: 'Close' }).click()
+		await dialog.locator('[data-test="stop-performance-button"]').click()
+		await page.locator('[data-test="play-song-button"]').click()
+		const reopenedDialog = page.getByRole('dialog', { name: 'Symphony No. 5' })
+		const reopenedContainer = reopenedDialog.locator('[data-test="pdf-viewer-container"]')
+		await expect(reopenedContainer).toHaveAttribute('data-score-color-mode', 'night-sepia')
+		await expect(reopenedContainer).toHaveAttribute('data-score-brightness', '70')
+	})
 })

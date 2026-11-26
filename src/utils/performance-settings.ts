@@ -3,6 +3,10 @@ import { SettingsStore, type StorageAdapter } from './settings-store'
 
 export type PerformanceLayoutChoice = 'auto' | 'single' | 'double' | 'continuous'
 export type PerformanceZoomChoice = 'fit-page' | 'fit-width'
+export type ScoreColorMode = 'normal' | 'sepia' | 'night' | 'night-sepia'
+
+export const SCORE_BRIGHTNESS_MIN = 40
+export const SCORE_BRIGHTNESS_MAX = 100
 
 export interface PerformanceViewerSettings {
 	layoutChoice: PerformanceLayoutChoice
@@ -14,6 +18,10 @@ export interface PerformanceViewerSettings {
 	backgroundColor: string
 	/** On-the-fly whitespace cropping of PDF pages to maximize note area */
 	tightCrop: boolean
+	/** Score inversion / tinting preset for dark stages or reduced glare */
+	scoreColorMode: ScoreColorMode
+	/** Score dimming percentage (40..100) for dark stages / pit orchestras */
+	scoreBrightness: number
 }
 
 export interface SetlistPerformanceOverride extends PerformanceViewerSettings {
@@ -25,6 +33,20 @@ export interface PerformanceBackgroundPreset {
 	label: string
 	previewColor: string
 }
+
+export interface ScoreColorPreset {
+	value: ScoreColorMode
+	label: string
+	previewBg: string
+	previewInk: string
+}
+
+export const SCORE_COLOR_PRESETS: ScoreColorPreset[] = [
+	{ value: 'normal', label: 'Normal', previewBg: '#ffffff', previewInk: '#111111' },
+	{ value: 'sepia', label: 'Sepia', previewBg: '#f4ead5', previewInk: '#2b2114' },
+	{ value: 'night', label: 'Night invert', previewBg: '#141414', previewInk: '#eaeaea' },
+	{ value: 'night-sepia', label: 'Warm night', previewBg: '#1a1510', previewInk: '#e6cfa8' },
+]
 
 export const PERFORMANCE_BACKGROUND_PRESETS: PerformanceBackgroundPreset[] = [
 	{ value: '', label: 'Theme default', previewColor: 'var(--color-main-background, #ffffff)' },
@@ -43,12 +65,49 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	interleaveSongs: false,
 	backgroundColor: '',
 	tightCrop: false,
+	scoreColorMode: 'normal',
+	scoreBrightness: SCORE_BRIGHTNESS_MAX,
 }
 
 const VALID_LAYOUTS = new Set<PerformanceLayoutChoice>(['auto', 'single', 'double', 'continuous'])
 const VALID_TURN_MODES = new Set<DoublePageTurnMode>(['half', 'step', 'spread'])
 const VALID_ZOOMS = new Set<PerformanceZoomChoice>(['fit-page', 'fit-width'])
+const VALID_SCORE_COLOR_MODES = new Set<ScoreColorMode>(['normal', 'sepia', 'night', 'night-sepia'])
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i
+
+export function sanitizeScoreBrightness(raw: unknown): number {
+	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+		return SCORE_BRIGHTNESS_MAX
+	}
+	return Math.min(SCORE_BRIGHTNESS_MAX, Math.max(SCORE_BRIGHTNESS_MIN, Math.round(raw)))
+}
+
+export function isNightScoreMode(mode: ScoreColorMode): boolean {
+	return mode === 'night' || mode === 'night-sepia'
+}
+
+export function getScoreFilterCss(mode: ScoreColorMode, brightness = SCORE_BRIGHTNESS_MAX): string {
+	const parts: string[] = []
+	if (mode === 'sepia') {
+		parts.push('sepia(0.45)', 'contrast(0.95)')
+	} else if (mode === 'night') {
+		parts.push('invert(0.92)', 'hue-rotate(180deg)')
+	} else if (mode === 'night-sepia') {
+		parts.push('invert(0.9)', 'sepia(0.35)', 'hue-rotate(180deg)')
+	}
+	const clamped = sanitizeScoreBrightness(brightness)
+	if (clamped < SCORE_BRIGHTNESS_MAX) {
+		parts.push(`brightness(${(clamped / 100).toFixed(2)})`)
+	}
+	return parts.join(' ')
+}
+
+export function getEffectiveStageBackground(backgroundColor: string, mode: ScoreColorMode): string {
+	if (backgroundColor) return backgroundColor
+	if (isNightScoreMode(mode)) return '#0f0f10'
+	if (mode === 'sepia') return '#ede4d3'
+	return ''
+}
 
 export function sanitizeBackgroundColor(raw: unknown): string {
 	if (typeof raw !== 'string') return ''
@@ -78,6 +137,10 @@ export function validatePerformanceSettings(raw: unknown): PerformanceViewerSett
 		tightCrop: typeof obj.tightCrop === 'boolean'
 			? obj.tightCrop
 			: DEFAULT_PERFORMANCE_SETTINGS.tightCrop,
+		scoreColorMode: VALID_SCORE_COLOR_MODES.has(obj.scoreColorMode as ScoreColorMode)
+			? (obj.scoreColorMode as ScoreColorMode)
+			: DEFAULT_PERFORMANCE_SETTINGS.scoreColorMode,
+		scoreBrightness: sanitizeScoreBrightness(obj.scoreBrightness),
 	}
 }
 
@@ -132,6 +195,8 @@ export function loadEffectivePerformanceSettings(
 					interleaveSongs: setlistOverride.interleaveSongs,
 					backgroundColor: setlistOverride.backgroundColor,
 					tightCrop: setlistOverride.tightCrop,
+					scoreColorMode: setlistOverride.scoreColorMode,
+					scoreBrightness: setlistOverride.scoreBrightness,
 				},
 				overrideEnabled: true,
 			}

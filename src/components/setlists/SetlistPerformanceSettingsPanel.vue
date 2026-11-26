@@ -2,7 +2,13 @@
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
-import { PERFORMANCE_BACKGROUND_PRESETS } from '../../utils/performance-settings'
+import {
+	PERFORMANCE_BACKGROUND_PRESETS,
+	SCORE_BRIGHTNESS_MAX,
+	SCORE_BRIGHTNESS_MIN,
+	SCORE_COLOR_PRESETS,
+	type ScoreColorMode,
+} from '../../utils/performance-settings'
 
 withDefaults(defineProps<{
 	open: boolean
@@ -11,11 +17,15 @@ withDefaults(defineProps<{
 	isSetlistOverride: boolean
 	backgroundColor?: string
 	tightCrop?: boolean
+	scoreColorMode?: ScoreColorMode
+	scoreBrightness?: number
 }>(), {
 	setlistName: '',
 	showSetlistScope: true,
 	backgroundColor: '',
 	tightCrop: false,
+	scoreColorMode: 'normal',
+	scoreBrightness: SCORE_BRIGHTNESS_MAX,
 })
 
 const emit = defineEmits<{
@@ -23,6 +33,8 @@ const emit = defineEmits<{
 	'update:isSetlistOverride': [enabled: boolean]
 	'update:backgroundColor': [color: string]
 	'update:tightCrop': [enabled: boolean]
+	'update:scoreColorMode': [mode: ScoreColorMode]
+	'update:scoreBrightness': [brightness: number]
 	saveAsLibraryDefault: []
 }>()
 </script>
@@ -40,6 +52,46 @@ const emit = defineEmits<{
 			</NcButton>
 		</div>
 		<div :class="$style.settingsBody">
+			<!-- Display: Night / Dark-Stage Score Appearance -->
+			<section :class="$style.section">
+				<strong :class="$style.sectionTitle">{{ t('sheetmusic', 'Score appearance') }}</strong>
+				<div :class="$style.swatchGrid">
+					<button
+						v-for="preset in SCORE_COLOR_PRESETS"
+						:key="preset.value"
+						type="button"
+						:class="[$style.swatchBtn, scoreColorMode === preset.value && $style.swatchBtnActive]"
+						:aria-pressed="scoreColorMode === preset.value"
+						:data-test="`performance-score-mode-${preset.value}`"
+						@click="emit('update:scoreColorMode', preset.value)">
+						<span
+							:class="$style.scoreChip"
+							:style="{ backgroundColor: preset.previewBg, color: preset.previewInk }"
+							aria-hidden="true">
+							♪
+						</span>
+						<span :class="$style.swatchLabel">{{ preset.label }}</span>
+					</button>
+				</div>
+				<label :class="$style.brightnessRow">
+					<span>{{ t('sheetmusic', 'Brightness') }}</span>
+					<div :class="$style.brightnessControls">
+						<input
+							type="range"
+							:min="SCORE_BRIGHTNESS_MIN"
+							:max="SCORE_BRIGHTNESS_MAX"
+							step="5"
+							:value="scoreBrightness"
+							:aria-label="t('sheetmusic', 'Score brightness')"
+							data-test="performance-score-brightness"
+							@input="emit('update:scoreBrightness', Number(($event.target as HTMLInputElement).value))">
+						<span :class="$style.brightnessValue" data-test="performance-score-brightness-value">
+							{{ scoreBrightness }}%
+						</span>
+					</div>
+				</label>
+			</section>
+
 			<!-- Display: Background Color -->
 			<section :class="$style.section">
 				<strong :class="$style.sectionTitle">{{ t('sheetmusic', 'Background color') }}</strong>
@@ -204,6 +256,43 @@ const emit = defineEmits<{
 	border-radius: 50%;
 	border: 1px solid var(--color-border-dark, rgba(0, 0, 0, 0.25));
 	flex-shrink: 0;
+}
+
+.scoreChip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 4px;
+	border: 1px solid var(--color-border-dark, rgba(0, 0, 0, 0.25));
+	font-size: 0.78rem;
+	font-weight: 700;
+	line-height: 1;
+	flex-shrink: 0;
+}
+
+.brightnessRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 0.84rem;
+	padding: 2px 4px;
+}
+
+.brightnessControls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.brightnessValue {
+	min-width: 38px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
 }
 
 .swatchLabel {

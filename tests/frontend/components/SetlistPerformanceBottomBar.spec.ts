@@ -29,6 +29,7 @@ describe('SetlistPerformanceBottomBar', () => {
 		await wrapper.find('button[aria-label="Next page"]').trigger('click')
 		await wrapper.find('button[aria-label="Next song"]').trigger('click')
 		await wrapper.find('button[aria-label="Setlist items"]').trigger('click')
+		await wrapper.find('[data-test="performance-bottom-night-toggle"]').trigger('click')
 		await wrapper.find('button[data-turn-mode="step"]').trigger('click')
 
 		const layoutSelect = wrapper.find('select[aria-label="Page layout"]')
@@ -39,6 +40,7 @@ describe('SetlistPerformanceBottomBar', () => {
 		expect(wrapper.emitted('nextPage')).toHaveLength(1)
 		expect(wrapper.emitted('nextSong')).toHaveLength(1)
 		expect(wrapper.emitted('toggleDrawer')).toHaveLength(1)
+		expect(wrapper.emitted('toggleNightMode')).toHaveLength(1)
 		expect(wrapper.emitted('changeDoublePageTurnMode')?.[0]).toEqual(['step'])
 		expect(wrapper.emitted('changeLayout')?.[0]).toEqual(['single'])
 	})

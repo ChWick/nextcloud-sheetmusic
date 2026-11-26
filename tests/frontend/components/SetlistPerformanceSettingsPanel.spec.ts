@@ -67,5 +67,14 @@ describe('SetlistPerformanceSettingsPanel', () => {
 
 		await wrapper.find('[data-test="performance-tight-crop-toggle"]').trigger('click')
 		expect(wrapper.emitted('update:tightCrop')?.[0]).toEqual([true])
+
+		await wrapper.find('[data-test="performance-score-mode-night"]').trigger('click')
+		expect(wrapper.emitted('update:scoreColorMode')?.[0]).toEqual(['night'])
+
+		await wrapper.find('[data-test="performance-score-mode-night-sepia"]').trigger('click')
+		expect(wrapper.emitted('update:scoreColorMode')?.[1]).toEqual(['night-sepia'])
+
+		await wrapper.find('[data-test="performance-score-brightness"]').setValue('70')
+		expect(wrapper.emitted('update:scoreBrightness')?.[0]).toEqual([70])
 	})
 })

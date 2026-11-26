@@ -44,6 +44,13 @@ import {
 } from '../utils/pdfCrop'
 import { observeContinuousPdfPages } from '../utils/pdf-continuous-renderer'
 import {
+	getEffectiveStageBackground,
+	getScoreFilterCss,
+	sanitizeScoreBrightness,
+	SCORE_BRIGHTNESS_MAX,
+	type ScoreColorMode,
+} from '../utils/performance-settings'
+import {
 	applyStageLayoutStyles,
 	createContinuousPagePlaceholder,
 	createDoublePageSlot,
@@ -85,6 +92,8 @@ const props = withDefaults(
 		interleaveSongs?: boolean
 		backgroundColor?: string
 		tightCrop?: boolean
+		scoreColorMode?: ScoreColorMode
+		scoreBrightness?: number
 		fileId?: number
 		initialCropBoxes?: Record<string, NormalizedCropBox> | null
 		nextFileId?: number
@@ -118,6 +127,8 @@ const props = withDefaults(
 		interleaveSongs: false,
 		backgroundColor: '',
 		tightCrop: false,
+		scoreColorMode: 'normal',
+		scoreBrightness: SCORE_BRIGHTNESS_MAX,
 		fileId: undefined,
 		initialCropBoxes: null,
 		nextFileId: undefined,
@@ -971,6 +982,26 @@ defineExpose({
 	showAnnotationsState,
 	toggleAnnotations,
 })
+
+const effectiveStageBackground = computed(() =>
+	getEffectiveStageBackground(props.backgroundColor, props.scoreColorMode),
+)
+
+const scoreStageStyle = computed<Record<string, string>>(() => {
+	const style: Record<string, string> = {}
+	if (effectiveStageBackground.value) {
+		style.backgroundColor = effectiveStageBackground.value
+	}
+	const filterCss = getScoreFilterCss(props.scoreColorMode, props.scoreBrightness)
+	if (filterCss) {
+		style['--sheetmusic-score-filter'] = filterCss
+	}
+	const brightness = sanitizeScoreBrightness(props.scoreBrightness)
+	if (brightness < SCORE_BRIGHTNESS_MAX) {
+		style['--sheetmusic-annotation-filter'] = `brightness(${(brightness / 100).toFixed(2)})`
+	}
+	return style
+})
 </script>
 
 <template>
@@ -983,7 +1014,12 @@ defineExpose({
 			{{ errorMessage }}
 		</p>
 
-		<div v-if="!isLoading && !errorMessage && isImageFile" :class="$style.imageViewer">
+		<div
+			v-if="!isLoading && !errorMessage && isImageFile"
+			:class="$style.imageViewer"
+			:style="scoreStageStyle"
+			:data-score-color-mode="scoreColorMode"
+			:data-score-brightness="scoreBrightness">
 			<img
 				:src="filePath"
 				:alt="filePath"
@@ -995,7 +1031,10 @@ defineExpose({
 		<div
 			v-show="!isLoading && !errorMessage && isPdfFile"
 			ref="pdfContainer"
-			:style="backgroundColor ? { backgroundColor } : undefined"
+			:style="scoreStageStyle"
+			:data-score-color-mode="scoreColorMode"
+			:data-score-brightness="scoreBrightness"
+			data-test="pdf-viewer-container"
 			:class="[$style.pdfContainer, !editableAnnotations && $style.pdfContainerGrabbable]">
 			<div
 				ref="pdfStage"
@@ -1134,6 +1173,8 @@ button[type='button'].linkJumpBackChip:hover {
 	max-width: 100%;
 	max-height: 100%;
 	object-fit: contain;
+	filter: var(--sheetmusic-score-filter, none);
+	transition: filter 0.15s ease;
 }
 
 .pdfContainer {
@@ -1172,6 +1213,16 @@ button[type='button'].linkJumpBackChip:hover {
 	width: max-content;
 	margin: auto;
 	box-sizing: border-box;
+}
+
+.pdfStage :global(canvas) {
+	filter: var(--sheetmusic-score-filter, none);
+	transition: filter 0.15s ease;
+}
+
+.pdfStage :global(.sheetmusic-annotation-layer) {
+	filter: var(--sheetmusic-annotation-filter, none);
+	transition: filter 0.15s ease;
 }
 
 .pdfStage.layout-double {

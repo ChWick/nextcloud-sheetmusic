@@ -11,9 +11,10 @@ import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import ViewGridOutlineIcon from 'vue-material-design-icons/ViewGridOutline.vue'
+import WeatherNightIcon from 'vue-material-design-icons/WeatherNight.vue'
 import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
-import type { PerformanceLayoutChoice, PerformanceZoomChoice } from '../../utils/performance-settings'
+import { isNightScoreMode, type PerformanceLayoutChoice, type PerformanceZoomChoice, type ScoreColorMode } from '../../utils/performance-settings'
 
 withDefaults(defineProps<{
 	visible: boolean
@@ -29,12 +30,14 @@ withDefaults(defineProps<{
 	zoomChoice: PerformanceZoomChoice
 	interleaveSongs?: boolean
 	tightCrop?: boolean
+	scoreColorMode?: ScoreColorMode
 	isPagePickerOpen?: boolean
 	isDrawerOpen?: boolean
 	showSetlistControls?: boolean
 }>(), {
 	interleaveSongs: false,
 	tightCrop: false,
+	scoreColorMode: 'normal',
 	isPagePickerOpen: false,
 	isDrawerOpen: false,
 	showSetlistControls: true,
@@ -50,6 +53,7 @@ const emit = defineEmits<{
 	toggleZoom: []
 	toggleInterleave: []
 	toggleTightCrop: []
+	toggleNightMode: []
 	togglePagePicker: []
 	toggleDrawer: []
 	pauseAutoHide: []
@@ -174,6 +178,17 @@ const emit = defineEmits<{
 				data-test="performance-bottom-crop-toggle"
 				@click="emit('toggleTightCrop')">
 				<template #icon><CropIcon :size="18" /></template>
+			</NcButton>
+
+			<NcButton
+				:variant="isNightScoreMode(scoreColorMode) ? 'primary' : 'secondary'"
+				size="small"
+				:aria-pressed="isNightScoreMode(scoreColorMode)"
+				:aria-label="t('sheetmusic', 'Night score mode')"
+				:title="t('sheetmusic', 'Toggle night score inversion')"
+				data-test="performance-bottom-night-toggle"
+				@click="emit('toggleNightMode')">
+				<template #icon><WeatherNightIcon :size="18" /></template>
 			</NcButton>
 
 			<NcButton
