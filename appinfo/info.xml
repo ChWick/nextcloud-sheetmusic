@@ -26,6 +26,14 @@ This app is primarily AI-generated and provided as-is without any warranty. Ther
 	<website>https://github.com/ChWick/nextcloud-sheetmusic</website>
 	<bugs>https://github.com/ChWick/nextcloud-sheetmusic/issues</bugs>
 	<repository type="git">https://github.com/ChWick/nextcloud-sheetmusic.git</repository>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/Songs.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/Song.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/Play.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/PdfEditor.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/SongMetadata.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/Setlist.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/Share.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ChWick/nextcloud-sheetmusic/main/screenshots/OfflineSetlist.png</screenshot>
 	<dependencies>
 		<nextcloud min-version="31" max-version="36"/>
 	</dependencies>

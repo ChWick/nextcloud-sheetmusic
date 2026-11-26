@@ -12,6 +12,26 @@ Whether you are a solo musician, choir director, orchestra member, or band leade
 
 ---
 
+## Screenshots
+
+| Library & Filter Bar | Score Viewer & Annotations |
+| --- | --- |
+| ![Library view](screenshots/Songs.png) | ![Score viewer and annotations](screenshots/Song.png) |
+
+| Fullscreen Performance Mode | In-Browser PDF Tools |
+| --- | --- |
+| ![Fullscreen two-page performance mode](screenshots/Play.png) | ![In-browser PDF editor](screenshots/PdfEditor.png) |
+
+| Song Metadata Editor | Setlist Management |
+| --- | --- |
+| ![Song metadata editor](screenshots/SongMetadata.png) | ![Setlist management](screenshots/Setlist.png) |
+
+| Library & Sub-Library Sharing | Offline Setlist Mode |
+| --- | --- |
+| ![Library and sub-library sharing](screenshots/Share.png) | ![Offline setlist mode](screenshots/OfflineSetlist.png) |
+
+---
+
 ## What This Project Is Really About
 
 Managing digital sheet music across multiple devices, band members, or ensembles usually involves painful compromises:
