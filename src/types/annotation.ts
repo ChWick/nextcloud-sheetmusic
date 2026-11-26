@@ -82,6 +82,10 @@ export interface AnnotationData {
 	category?: StampCategory
 	/** 0-indexed target page when type === 'link' */
 	targetPage?: number
+	/** Optional normalized [0..1] target arrival X coordinate when type === 'link' */
+	targetX?: number
+	/** Optional normalized [0..1] target arrival Y coordinate when type === 'link' */
+	targetY?: number
 	/** Optional display label for links */
 	label?: string
 	/** Optional pre-computed SVG path fallback */
