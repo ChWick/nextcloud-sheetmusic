@@ -49,6 +49,30 @@ class PdfCropService {
 	}
 
 	/**
+	 * Check whether the server has a supported PDF rasterization CLI tool (`pdftoppm` or `gs`) + GD.
+	 */
+	public function hasServerRasterTool(): bool {
+		return $this->detectRasterTool() !== null && function_exists('imagecreatefrompng');
+	}
+
+	/**
+	 * Backfill helper for periodic cron: enqueue up to `$limit` uncropped PDF files.
+	 * Short-circuits with zero DB queries when no server rasterizer is available.
+	 */
+	public function enqueueUncroppedPdfBatch(int $limit = 2): int {
+		if (!$this->hasServerRasterTool()) {
+			return 0;
+		}
+		$candidates = $this->songFileMapper->findUncroppedPdfFiles($limit);
+		$enqueued = 0;
+		foreach ($candidates as $item) {
+			$this->enqueueCropJob($item['userId'], $item['fileId']);
+			$enqueued++;
+		}
+		return $enqueued;
+	}
+
+	/**
 	 * Enqueue a Nextcloud background job to compute tight crop boxes for a single PDF file.
 	 * Nextcloud's IJobList deduplicates identical class + argument pairs automatically.
 	 */

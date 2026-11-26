@@ -183,6 +183,49 @@ class InternalSongFileMapper {
 		return $this->updateCropBoxesByFileId($fileId, null, null);
 	}
 
+	/**
+	 * Find distinct active PDF files that have no crop boxes yet (or whose cached hash is stale).
+	 *
+	 * @return list<array{userId: string, fileId: int}>
+	 */
+	public function findUncroppedPdfFiles(int $limit = 2): array {
+		$limit = max(1, $limit);
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('l.user_id', 'f.file_id')
+			->from(self::TABLE_NAME, 'f')
+			->innerJoin('f', InternalSongMapper::TABLE_NAME, 's', $qb->expr()->eq('f.song_id', 's.id'))
+			->innerJoin('s', LibraryMapper::TABLE_NAME, 'l', $qb->expr()->eq('s.library_id', 'l.id'))
+			->where($qb->expr()->eq('f.type', $qb->createNamedParameter(InternalSongFile::FILE_TYPE_PDF, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('f.deleted_at'))
+			->andWhere($qb->expr()->isNull('s.deleted_at'))
+			->andWhere(
+				$qb->expr()->orX(
+					$qb->expr()->isNull('f.crop_boxes'),
+					$qb->expr()->eq('f.crop_boxes', $qb->createNamedParameter('', IQueryBuilder::PARAM_STR)),
+					$qb->expr()->andX(
+						$qb->expr()->isNotNull('f.file_hash'),
+						$qb->expr()->isNotNull('f.crop_boxes_hash'),
+						$qb->expr()->neq('f.crop_boxes_hash', 'f.file_hash'),
+					),
+				),
+			)
+			->orderBy('f.file_id', 'ASC')
+			->setMaxResults($limit);
+
+		$result = $qb->executeQuery();
+		$items = [];
+		while ($row = $result->fetchAssociative()) {
+			$userId = (string)($row['user_id'] ?? '');
+			$fileId = (int)($row['file_id'] ?? 0);
+			if ($userId !== '' && $fileId > 0) {
+				$items[] = ['userId' => $userId, 'fileId' => $fileId];
+			}
+		}
+		$result->closeCursor();
+
+		return $items;
+	}
+
 	public function delete(int $id, bool $hardDelete = false): bool {
 		$file = $this->findById($id);
 		$now = time();

@@ -32,6 +32,9 @@ This app is primarily AI-generated and provided as-is without any warranty. Ther
 	<commands>
 		<command>OCA\SheetMusic\Command\SeedTestLibraryCommand</command>
 	</commands>
+	<background-jobs>
+		<job>OCA\SheetMusic\BackgroundJob\BackfillPdfCropBoxesJob</job>
+	</background-jobs>
 	<navigations>
 		<navigation>
 			<id>sheetmusic</id>

@@ -799,6 +799,10 @@ class SongFileService {
 			$this->internalSongFileMapper->insert($internalSongFile);
 		}
 
+		if (InternalSongFile::determineFileType($fileName) === InternalSongFile::FILE_TYPE_PDF) {
+			$this->pdfCropService?->enqueueCropJob($user->getUID(), (int)$file->getId());
+		}
+
 		if ($syncAfter) {
 			$this->libraryMapper->touch($libraryId);
 			$this->syncSongFiles($user, $songId, $libraryId);

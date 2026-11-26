@@ -145,4 +145,40 @@ class PdfCropServiceTest extends TestCase {
 			@unlink($tmpPath);
 		}
 	}
+
+	public function testEnqueueUncroppedPdfBatchEnqueuesEachCandidateWhenRasterToolAvailable(): void {
+		$mapper = $this->createMock(InternalSongFileMapper::class);
+		$mapper->expects(self::once())
+			->method('findUncroppedPdfFiles')
+			->with(2)
+			->willReturn([
+				['userId' => 'alice', 'fileId' => 101],
+				['userId' => 'bob', 'fileId' => 202],
+			]);
+
+		$jobList = $this->createMock(IJobList::class);
+		$enqueued = [];
+		$jobList->expects(self::exactly(2))
+			->method('add')
+			->willReturnCallback(function (string $class, array $args) use (&$enqueued): void {
+				$enqueued[] = [$class, $args];
+			});
+
+		$service = new class (
+			$mapper,
+			$this->createMock(IRootFolder::class),
+			$jobList,
+			$this->createMock(LoggerInterface::class),
+		) extends PdfCropService {
+			public function hasServerRasterTool(): bool {
+				return true;
+			}
+		};
+
+		self::assertSame(2, $service->enqueueUncroppedPdfBatch(2));
+		self::assertSame([
+			[ComputePdfCropBoxesJob::class, ['userId' => 'alice', 'fileId' => 101]],
+			[ComputePdfCropBoxesJob::class, ['userId' => 'bob', 'fileId' => 202]],
+		], $enqueued);
+	}
 }
