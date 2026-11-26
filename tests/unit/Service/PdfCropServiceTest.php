@@ -126,4 +126,23 @@ class PdfCropServiceTest extends TestCase {
 		self::assertArrayHasKey('1', $saved);
 		self::assertArrayHasKey('2', $saved);
 	}
+
+	public function testStreamNodeToTempFileUsesStreamWithoutLoadingWholeFile(): void {
+		$stream = fopen('php://memory', 'r+b');
+		self::assertIsResource($stream);
+		fwrite($stream, '%PDF-1.4 streamed-test-payload');
+		rewind($stream);
+
+		$file = $this->createMock(File::class);
+		$file->expects(self::once())->method('fopen')->with('rb')->willReturn($stream);
+		$file->expects(self::never())->method('getContent');
+
+		$tmpPath = sys_get_temp_dir() . '/sheetmusic-stream-test-' . bin2hex(random_bytes(6)) . '.pdf';
+		try {
+			self::assertTrue(PdfCropService::streamNodeToTempFile($file, $tmpPath));
+			self::assertSame('%PDF-1.4 streamed-test-payload', file_get_contents($tmpPath));
+		} finally {
+			@unlink($tmpPath);
+		}
+	}
 }

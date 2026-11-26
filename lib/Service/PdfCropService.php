@@ -33,6 +33,10 @@ class PdfCropService {
 		'bottom' => 1.0,
 	];
 
+	private const PAGES_PER_CHUNK = 20;
+	private const CHUNK_TIMEOUT_SECONDS = 30;
+	private const MAX_PAGES_TO_PROCESS = 2000;
+
 	private ?string $detectedTool = null;
 	private bool $toolChecked = false;
 
@@ -194,7 +198,10 @@ class PdfCropService {
 			return false;
 		}
 
-		$computed = $this->computeCropBoxesForPdfFile($fileNode);
+		$computed = $this->computeCropBoxesForPdfFile(
+			$fileNode,
+			$primary->pageCount > 0 ? $primary->pageCount : null,
+		);
 		if ($computed === null || $computed === []) {
 			return false;
 		}
@@ -209,12 +216,44 @@ class PdfCropService {
 	}
 
 	/**
-	 * Rasterize a PDF file at low DPI (36 DPI) using `pdftoppm` or `gs` and detect ink bounds per page.
+	 * Stream a Nextcloud file node to a local temporary path without loading the whole file into PHP RAM.
+	 */
+	public static function streamNodeToTempFile(File $fileNode, string $destPath): bool {
+		$src = null;
+		$dst = null;
+		try {
+			$src = $fileNode->fopen('rb');
+			if (is_resource($src)) {
+				$dst = @fopen($destPath, 'wb');
+				if (!is_resource($dst)) {
+					return false;
+				}
+				$bytes = stream_copy_to_stream($src, $dst);
+				return $bytes !== false && $bytes > 0;
+			}
+		} catch (\Throwable) {
+			// Fallback to getContent() below if stream wrapper is unsupported
+		} finally {
+			if (is_resource($src)) {
+				@fclose($src);
+			}
+			if (is_resource($dst)) {
+				@fclose($dst);
+			}
+		}
+
+		$content = $fileNode->getContent();
+		return $content !== '' && @file_put_contents($destPath, $content) !== false;
+	}
+
+	/**
+	 * Rasterize a PDF file at low DPI (36 DPI) in bounded page chunks using `pdftoppm` or `gs`,
+	 * scanning and immediately deleting each temporary PNG to keep memory and /tmp usage small.
 	 * Returns null when no server-side PDF rasterizer is installed.
 	 *
 	 * @return ?array<string, array{left: float, top: float, right: float, bottom: float}>
 	 */
-	public function computeCropBoxesForPdfFile(File $fileNode): ?array {
+	public function computeCropBoxesForPdfFile(File $fileNode, ?int $expectedPageCount = null): ?array {
 		$tool = $this->detectRasterTool();
 		if ($tool === null || !function_exists('imagecreatefrompng')) {
 			return null;
@@ -227,53 +266,66 @@ class PdfCropService {
 
 		try {
 			$pdfPath = $tmpDir . '/input.pdf';
-			$content = $fileNode->getContent();
-			if ($content === '' || @file_put_contents($pdfPath, $content) === false) {
+			if (!self::streamNodeToTempFile($fileNode, $pdfPath)) {
 				return null;
 			}
 
-			$outPrefix = $tmpDir . '/page';
-			if ($tool === 'pdftoppm') {
-				$cmd = sprintf(
-					'pdftoppm -png -r 36 %s %s 2>/dev/null',
-					escapeshellarg($pdfPath),
-					escapeshellarg($outPrefix),
-				);
-			} else {
-				$cmd = sprintf(
-					'gs -q -dNOPAUSE -dBATCH -dSAFER -sDEVICE=pnggray -r36 -sOutputFile=%s %s 2>/dev/null',
-					escapeshellarg($outPrefix . '-%04d.png'),
-					escapeshellarg($pdfPath),
-				);
-			}
-
-			$exitCode = 1;
-			$output = [];
-			@exec($cmd, $output, $exitCode);
-			if ($exitCode !== 0) {
-				return null;
-			}
-
-			$pngFiles = glob($outPrefix . '-*.png');
-			if (!is_array($pngFiles) || $pngFiles === []) {
-				return null;
-			}
-			natsort($pngFiles);
+			$maxPage = $expectedPageCount !== null && $expectedPageCount > 0
+				? min($expectedPageCount, self::MAX_PAGES_TO_PROCESS)
+				: self::MAX_PAGES_TO_PROCESS;
 
 			$boxes = [];
-			$pageNum = 1;
-			foreach ($pngFiles as $pngPath) {
-				$img = @imagecreatefrompng($pngPath);
-				if ($img instanceof \GdImage) {
-					$boxes[(string)$pageNum] = self::detectInkBoundsFromGdImage($img);
-					unset($img);
-				} else {
-					$boxes[(string)$pageNum] = self::FULL_PAGE_CROP;
+			for ($firstPage = 1; $firstPage <= $maxPage; $firstPage += self::PAGES_PER_CHUNK) {
+				$lastPage = min($maxPage, $firstPage + self::PAGES_PER_CHUNK - 1);
+				$chunkPrefix = $tmpDir . '/chunk-' . $firstPage;
+
+				$args = $tool === 'pdftoppm'
+					? ['pdftoppm', '-png', '-r', '36', '-f', (string)$firstPage, '-l', (string)$lastPage, $pdfPath, $chunkPrefix]
+					: [
+						'gs',
+						'-q',
+						'-dNOPAUSE',
+						'-dBATCH',
+						'-dSAFER',
+						'-sDEVICE=pnggray',
+						'-r36',
+						'-dFirstPage=' . $firstPage,
+						'-dLastPage=' . $lastPage,
+						'-sOutputFile=' . $chunkPrefix . '-%04d.png',
+						$pdfPath,
+					];
+
+				$exitCode = $this->runCommandWithTimeout($args, self::CHUNK_TIMEOUT_SECONDS);
+				$pngFiles = glob($chunkPrefix . '-*.png');
+				if (!is_array($pngFiles) || $pngFiles === []) {
+					if ($firstPage === 1 && $exitCode !== 0) {
+						return null;
+					}
+					break;
 				}
-				$pageNum++;
+
+				natsort($pngFiles);
+				$chunkCount = 0;
+				foreach ($pngFiles as $pngPath) {
+					$pageNum = $firstPage + $chunkCount;
+					$img = @imagecreatefrompng($pngPath);
+					if ($img instanceof \GdImage) {
+						$boxes[(string)$pageNum] = self::detectInkBoundsFromGdImage($img);
+						unset($img);
+					} else {
+						$boxes[(string)$pageNum] = self::FULL_PAGE_CROP;
+					}
+					@unlink($pngPath);
+					$chunkCount++;
+				}
+
+				// Stop early if this chunk hit EOF of the PDF
+				if ($chunkCount < ($lastPage - $firstPage + 1)) {
+					break;
+				}
 			}
 
-			return $boxes;
+			return $boxes !== [] ? $boxes : null;
 		} catch (\Throwable $e) {
 			$this->logger->debug('Failed computing PDF crop boxes on server: ' . $e->getMessage());
 			return null;
@@ -285,6 +337,47 @@ class PdfCropService {
 				}
 			}
 			@rmdir($tmpDir);
+		}
+	}
+
+	/**
+	 * Execute a command with an argv array (no shell) and enforce a hard wall-clock timeout.
+	 *
+	 * @param list<string> $args
+	 */
+	private function runCommandWithTimeout(array $args, int $timeoutSeconds): int {
+		if (!function_exists('proc_open')) {
+			return -1;
+		}
+		$descriptors = [
+			0 => ['file', '/dev/null', 'r'],
+			1 => ['file', '/dev/null', 'w'],
+			2 => ['file', '/dev/null', 'w'],
+		];
+		$pipes = [];
+		$proc = @proc_open($args, $descriptors, $pipes);
+		if (!is_resource($proc)) {
+			return -1;
+		}
+
+		$deadline = microtime(true) + max(1, $timeoutSeconds);
+		while (true) {
+			$status = proc_get_status($proc);
+			if (!$status['running']) {
+				$exitCode = (int)$status['exitcode'];
+				proc_close($proc);
+				return $exitCode;
+			}
+			if (microtime(true) >= $deadline) {
+				@proc_terminate($proc, 9);
+				proc_close($proc);
+				$this->logger->warning('Timed out while rasterizing PDF chunk for tight cropping', [
+					'tool' => $args[0] ?? 'unknown',
+					'timeoutSeconds' => $timeoutSeconds,
+				]);
+				return -1;
+			}
+			usleep(50000);
 		}
 	}
 
