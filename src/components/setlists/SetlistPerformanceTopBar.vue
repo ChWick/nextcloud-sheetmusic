@@ -56,6 +56,12 @@ watch(isLayersOpen, (open) => {
 		emit('resumeAutoHide')
 	}
 })
+
+watch(() => props.visible, (visible) => {
+	if (!visible) {
+		isLayersOpen.value = false
+	}
+})
 </script>
 
 <template>

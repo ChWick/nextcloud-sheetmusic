@@ -87,5 +87,9 @@ describe('SetlistPerformanceTopBar', () => {
 
 		await wrapper.find('[data-test="performance-layer-toggle-1"]').trigger('click')
 		expect(wrapper.emitted('toggleLayerVisibility')).toEqual([[1]])
+
+		// Hiding the top bar (e.g. entering Concert Mode) closes the layers popover
+		await wrapper.setProps({ visible: false })
+		expect(wrapper.find('[data-test="performance-layers-popover"]').exists()).toBe(false)
 	})
 })
