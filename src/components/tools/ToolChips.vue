@@ -45,10 +45,12 @@ const emit = defineEmits<{
 	gap: 8px;
 }
 
-.chip {
+button[type='button'].chip {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+	margin: 0;
+	min-height: 32px;
 	padding: 5px 12px;
 	border-radius: var(--border-radius-pill, 16px);
 	border: 1px solid var(--color-border);
@@ -61,23 +63,23 @@ const emit = defineEmits<{
 	line-height: 1.2;
 }
 
-.chip:hover {
+button[type='button'].chip:hover {
 	background: var(--color-background-hover);
 	border-color: var(--color-border-dark, var(--color-border));
 }
 
-.chip:focus-visible {
+button[type='button'].chip:focus-visible {
 	outline: 2px solid var(--color-primary-element);
 	outline-offset: 1px;
 }
 
-.chipActive {
+button[type='button'].chipActive {
 	background: var(--color-primary-element);
 	border-color: var(--color-primary-element);
 	color: var(--color-primary-element-text);
 }
 
-.chipActive:hover {
+button[type='button'].chipActive:hover {
 	background: var(--color-primary-element-hover, var(--color-primary-element));
 	border-color: var(--color-primary-element-hover, var(--color-primary-element));
 	color: var(--color-primary-element-text);

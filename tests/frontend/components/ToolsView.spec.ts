@@ -99,4 +99,30 @@ describe('ToolsView', () => {
 		expect(wrapper.find('[data-test="mock-page-order-tool"]').exists()).toBe(false)
 		expect(wrapper.find('[data-test="header-title"]').text()).toBe('Library Tools')
 	})
+
+	it('exposes Metronome, Pitch Pipe, and Tuner tools and renders their reusable panels', async () => {
+		const wrapper = mountComponent()
+
+		expect(wrapper.find('[data-test="tool-card-metronome"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="tool-card-pitch-pipe"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="tool-card-tuner"]').exists()).toBe(true)
+
+		await wrapper.find('[data-test="tool-card-metronome"]').trigger('click')
+		expect(mockRouter.replace).toHaveBeenLastCalledWith({ query: { tool: 'metronome' } })
+		expect(wrapper.find('[data-test="metronome-tool"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="metronome-panel"]').exists()).toBe(true)
+
+		await wrapper.find('[data-test="header-back"]').trigger('click')
+		await wrapper.find('[data-test="tool-card-pitch-pipe"]').trigger('click')
+		expect(mockRouter.replace).toHaveBeenLastCalledWith({ query: { tool: 'pitch-pipe' } })
+		expect(wrapper.find('[data-test="pitch-pipe-tool"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="pitch-pipe-note-grid"]').exists()).toBe(true)
+
+		await wrapper.find('[data-test="header-back"]').trigger('click')
+		await wrapper.find('[data-test="tool-card-tuner"]').trigger('click')
+		expect(mockRouter.replace).toHaveBeenLastCalledWith({ query: { tool: 'tuner' } })
+		expect(wrapper.find('[data-test="tuner-tool"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="tuner-section"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="pitch-a4-value"]').text()).toBe('440 Hz')
+	})
 })

@@ -5,8 +5,12 @@
 
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import A4CalibrationControl from '../../src/components/setlists/A4CalibrationControl.vue'
 import PerformancePitchPipePanel from '../../src/components/setlists/PerformancePitchPipePanel.vue'
+import PerformancePitchPipeSection from '../../src/components/setlists/PerformancePitchPipeSection.vue'
+import TunerMeter from '../../src/components/setlists/TunerMeter.vue'
 import { resetSharedAudioContextForTests } from '../../src/utils/audio-engine'
+import { MAX_A4_HZ, MIN_A4_HZ } from '../../src/utils/music-tools'
 import {
 	createPitchSmoother,
 	detectPitchFromBuffer,
@@ -151,5 +155,106 @@ describe('pitch-detector & microphone tuner', () => {
 		// Starting tuner stops any playing pitch-pipe drone to avoid feedback
 		expect(wrapper.emitted('stop')).toBeTruthy()
 		expect(wrapper.find('[data-test="tuner-error"]').text()).toContain('denied')
+	})
+
+	it('renders A4CalibrationControl with bounds enforcement and preset clicks', async () => {
+		const wrapper = mount(A4CalibrationControl, { props: { a4Hz: MIN_A4_HZ } })
+		expect(wrapper.get('[data-test="pitch-a4-minus"]').attributes('disabled')).toBeDefined()
+		expect(wrapper.get('[data-test="pitch-a4-plus"]').attributes('disabled')).toBeUndefined()
+
+		await wrapper.get('[data-test="pitch-a4-plus"]').trigger('click')
+		expect(wrapper.emitted('update:a4Hz')?.[0]).toEqual([MIN_A4_HZ + 1])
+
+		await wrapper.get('[data-test="pitch-a4-preset-442"]').trigger('click')
+		expect(wrapper.emitted('update:a4Hz')?.[1]).toEqual([442])
+
+		await wrapper.setProps({ a4Hz: MAX_A4_HZ })
+		expect(wrapper.get('[data-test="pitch-a4-plus"]').attributes('disabled')).toBeDefined()
+	})
+
+	it('renders TunerMeter needle only when cents is present and clamps position to [0%, 100%]', async () => {
+		const wrapper = mount(TunerMeter, { props: { cents: null, status: 'idle' } })
+		expect(wrapper.find('[data-test="tuner-needle"]').exists()).toBe(false)
+
+		await wrapper.setProps({ cents: 0, status: 'in-tune' })
+		expect(wrapper.get('[data-test="tuner-needle"]').attributes('style')).toContain('left: 50%')
+
+		await wrapper.setProps({ cents: -75, status: 'off' })
+		expect(wrapper.get('[data-test="tuner-needle"]').attributes('style')).toContain('left: 0%')
+
+		await wrapper.setProps({ cents: 60, status: 'off' })
+		expect(wrapper.get('[data-test="tuner-needle"]').attributes('style')).toContain('left: 100%')
+	})
+
+	it('renders PerformancePitchPipeSection in idle state and emits waveform and octave changes', async () => {
+		const wrapper = mount(PerformancePitchPipeSection, {
+			props: {
+				activePitchClass: null,
+				activeNoteLabel: '',
+				activeFrequency: null,
+				octave: 4,
+				waveform: 'triangle',
+			},
+		})
+		expect(wrapper.get('[data-test="pitch-pipe-status"]').text()).toContain('Tap a note')
+		await wrapper.get('[data-test="pitch-waveform-sine"]').trigger('click')
+		expect(wrapper.emitted('update:waveform')).toEqual([['sine']])
+		await wrapper.get('[data-test="pitch-octave-3"]').trigger('click')
+		expect(wrapper.emitted('update:octave')).toEqual([[3]])
+	})
+
+	it('falls back to { audio: true } on OverconstrainedError and cleans up tracks on unmount', async () => {
+		const stopTrack = vi.fn()
+		const overErr = new Error('Overconstrained')
+		overErr.name = 'OverconstrainedError'
+		const getUserMedia = vi.fn()
+			.mockRejectedValueOnce(overErr)
+			.mockResolvedValueOnce({ getTracks: () => [{ stop: stopTrack }] })
+
+		const fakeAnalyser = {
+			fftSize: 4096,
+			connect: vi.fn(),
+			disconnect: vi.fn(),
+			getFloatTimeDomainData: vi.fn((arr: Float32Array) => { arr.fill(0) }),
+		}
+		Object.defineProperty(window, 'AudioContext', {
+			value: class FakeAudioContext {
+				state = 'running'
+				sampleRate = 48000
+				destination = {}
+				resume = vi.fn().mockResolvedValue(undefined)
+				close = vi.fn().mockResolvedValue(undefined)
+				createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }))
+				createAnalyser = vi.fn(() => fakeAnalyser)
+				createGain = vi.fn(() => ({ gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() }))
+			},
+			configurable: true,
+		})
+		Object.defineProperty(navigator, 'mediaDevices', {
+			value: { getUserMedia },
+			configurable: true,
+		})
+
+		const wrapper = mount(PerformancePitchPipePanel, {
+			props: {
+				activePitchClass: null,
+				activeNoteLabel: '',
+				activeFrequency: null,
+				octave: 4,
+				a4Hz: 440,
+				waveform: 'triangle',
+			},
+		})
+		await wrapper.get('[data-test="pitch-mode-tuner"]').trigger('click')
+		await wrapper.get('[data-test="tuner-toggle-button"]').trigger('click')
+		await vi.waitFor(() => {
+			expect(getUserMedia).toHaveBeenCalledTimes(2)
+			expect(wrapper.find('[data-test="tuner-level"]').exists()).toBe(true)
+		})
+		expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true })
+
+		// Switching back to Pitch Pipe unmounts PerformanceTunerSection and stops the mic track
+		await wrapper.get('[data-test="pitch-mode-pipe"]').trigger('click')
+		expect(stopTrack).toHaveBeenCalledTimes(1)
 	})
 })

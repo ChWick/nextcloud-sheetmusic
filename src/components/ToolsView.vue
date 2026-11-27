@@ -8,9 +8,15 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
+import Metronome from 'vue-material-design-icons/Metronome.vue'
+import Microphone from 'vue-material-design-icons/Microphone.vue'
+import MusicNote from 'vue-material-design-icons/MusicNote.vue'
 import type { ToolDefinition } from '../types/tools'
 import ViewHeader from './ViewHeader.vue'
+import MetronomeTool from './tools/MetronomeTool.vue'
 import PageOrderResetTool from './tools/PageOrderResetTool.vue'
+import PitchPipeTool from './tools/PitchPipeTool.vue'
+import TunerTool from './tools/TunerTool.vue'
 import ToolsOverview from './tools/ToolsOverview.vue'
 import ToolChips from './tools/ToolChips.vue'
 
@@ -22,6 +28,24 @@ const route = useRoute()
 const router = useRouter()
 
 const availableTools: ToolDefinition[] = [
+	{
+		id: 'metronome',
+		name: t('sheetmusic', 'Metronome'),
+		description: t('sheetmusic', 'Keep steady tempo with configurable BPM, time signatures, and tap tempo'),
+		icon: Metronome,
+	},
+	{
+		id: 'pitch-pipe',
+		name: t('sheetmusic', 'Pitch Pipe'),
+		description: t('sheetmusic', 'Sound chromatic reference tones with octave, waveform, and A4 calibration'),
+		icon: MusicNote,
+	},
+	{
+		id: 'tuner',
+		name: t('sheetmusic', 'Tuner'),
+		description: t('sheetmusic', 'Check intonation live using your browser microphone with A4 calibration'),
+		icon: Microphone,
+	},
 	{
 		id: 'page-order-reset',
 		name: t('sheetmusic', 'Reset Page Ordering'),
@@ -69,13 +93,17 @@ const activeTool = computed(() => {
 			:title="activeTool ? activeTool.name : t('sheetmusic', 'Library Tools')"
 			:show-back="Boolean(activeTool)"
 			:back-title="t('sheetmusic', 'Back to tools')"
-			@back="selectTool(null)">
+			@back="selectTool(null)" />
+
+		<div
+			v-if="activeTool && availableTools.length > 1"
+			:class="$style.toolSwitcherBar"
+			data-test="tools-switcher-bar">
 			<ToolChips
-				v-if="activeTool && availableTools.length > 1"
 				:tools="availableTools"
 				:active-tool-id="activeToolId"
 				@select="selectTool" />
-		</ViewHeader>
+		</div>
 
 		<div :class="$style.content">
 			<ToolsOverview
@@ -83,6 +111,9 @@ const activeTool = computed(() => {
 				:tools="availableTools"
 				@select="selectTool" />
 
+			<MetronomeTool v-else-if="activeToolId === 'metronome'" />
+			<PitchPipeTool v-else-if="activeToolId === 'pitch-pipe'" />
+			<TunerTool v-else-if="activeToolId === 'tuner'" />
 			<PageOrderResetTool
 				v-else-if="activeToolId === 'page-order-reset'"
 				:selected-library="selectedLibrary" />
@@ -99,11 +130,21 @@ const activeTool = computed(() => {
 	overflow-y: auto;
 }
 
+.toolSwitcherBar {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	padding: 8px 32px;
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-main-background);
+}
+
 .content {
 	padding: 24px 32px;
 	max-width: 1400px;
 	width: 100%;
 	box-sizing: border-box;
 	margin: 0 auto;
+	flex: 1 0 auto;
 }
 </style>

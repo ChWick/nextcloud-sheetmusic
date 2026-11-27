@@ -101,6 +101,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
   min-height: var(--default-clickable-area, 44px);
   padding: 4px 16px 4px calc(var(--default-clickable-area, 44px) + 16px);
   border-bottom: 1px solid var(--color-border);

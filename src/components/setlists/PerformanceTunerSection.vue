@@ -4,6 +4,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import MicrophoneIcon from 'vue-material-design-icons/Microphone.vue'
 import MicrophoneOffIcon from 'vue-material-design-icons/MicrophoneOff.vue'
+import TunerMeter, { type TuningStatus } from './TunerMeter.vue'
 import { useTuner } from '../../composables/useTuner'
 import { formatCentsOffset } from '../../utils/pitch-detector'
 
@@ -17,12 +18,7 @@ const emit = defineEmits<{
 
 const tuner = useTuner(toRef(props, 'a4Hz'))
 
-const needlePercent = computed(() => {
-	const cents = tuner.detected.value?.cents ?? 0
-	return Math.max(0, Math.min(100, 50 + cents))
-})
-
-const tuningStatus = computed<'idle' | 'in-tune' | 'close' | 'off'>(() => {
+const tuningStatus = computed<TuningStatus>(() => {
 	const d = tuner.detected.value
 	if (!d) return 'idle'
 	if (d.inTune) return 'in-tune'
@@ -58,27 +54,9 @@ async function handleToggle() {
 			</span>
 		</div>
 
-		<div :class="$style.meterWrap" aria-hidden="true">
-			<div :class="$style.meterTrack">
-				<div :class="$style.meterCenterZone" />
-				<div :class="$style.meterCenterTick" />
-				<div
-					v-if="tuner.detected.value"
-					:class="[
-						$style.meterNeedle,
-						tuningStatus === 'in-tune' && $style.needleInTune,
-						tuningStatus === 'close' && $style.needleClose,
-						tuningStatus === 'off' && $style.needleOff,
-					]"
-					:style="{ left: `${needlePercent}%` }"
-					data-test="tuner-needle" />
-			</div>
-			<div :class="$style.meterScale">
-				<span>♭ -50¢</span>
-				<span>0¢</span>
-				<span>+50¢ ♯</span>
-			</div>
-		</div>
+		<TunerMeter
+			:cents="tuner.detected.value?.cents ?? null"
+			:status="tuningStatus" />
 
 		<div v-if="tuner.isListening.value" :class="$style.levelTrack" aria-hidden="true" data-test="tuner-level">
 			<div
@@ -155,69 +133,6 @@ async function handleToggle() {
 
 .centsInTune {
 	color: var(--color-success, #2e7d32);
-}
-
-.meterWrap {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.meterTrack {
-	position: relative;
-	height: 16px;
-	border-radius: 999px;
-	background: var(--color-background-dark, #e5e5e5);
-	overflow: hidden;
-}
-
-.meterCenterZone {
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 45%;
-	width: 10%;
-	background: rgba(46, 125, 50, 0.22);
-}
-
-.meterCenterTick {
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 50%;
-	width: 2px;
-	transform: translateX(-50%);
-	background: var(--color-border-dark, #888);
-}
-
-.meterNeedle {
-	position: absolute;
-	top: 1px;
-	bottom: 1px;
-	width: 6px;
-	border-radius: 999px;
-	transform: translateX(-50%);
-	transition: left 0.12s ease-out;
-}
-
-.needleInTune {
-	background: var(--color-success, #2e7d32);
-}
-
-.needleClose {
-	background: var(--color-warning, #ed6c02);
-}
-
-.needleOff {
-	background: var(--color-error, #d32f2f);
-}
-
-.meterScale {
-	display: flex;
-	justify-content: space-between;
-	font-size: 0.7rem;
-	color: var(--color-text-maxcontrast);
-	font-variant-numeric: tabular-nums;
 }
 
 .levelTrack {
