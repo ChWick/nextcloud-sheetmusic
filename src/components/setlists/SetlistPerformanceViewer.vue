@@ -72,6 +72,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
 	close: []
 	'update:current-index': [index: number]
+	'update:annotations': [annotations: SheetAnnotation[]]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -531,6 +532,9 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 		layerId: draft.layerId ?? targetLayerId,
 	}
 	annotations.value = [...annotations.value, optimistic]
+	if (isSingleSongMode.value) {
+		emit('update:annotations', annotations.value)
+	}
 	if (!showAnnotations.value) {
 		showAnnotations.value = true
 		previewerRef.value?.toggleAnnotations()
@@ -545,6 +549,9 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 		}
 		if (reqIdAtStart !== annotationRequestId) return
 		annotations.value = annotations.value.map((a) => (a.uuid === optimistic.uuid ? saved : a))
+		if (isSingleSongMode.value) {
+			emit('update:annotations', annotations.value)
+		}
 	} catch {
 		// Keep optimistic stroke locally if offline or transient save error
 	}
@@ -553,6 +560,9 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 async function onQuickDeleteAnnotation(ann: SheetAnnotation) {
 	if (!canStylusQuickDraw.value) return
 	annotations.value = annotations.value.filter((a) => a.uuid !== ann.uuid)
+	if (isSingleSongMode.value) {
+		emit('update:annotations', annotations.value)
+	}
 	if (ann.id) {
 		try {
 			await deleteSongAnnotation(ann.id)

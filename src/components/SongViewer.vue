@@ -434,6 +434,7 @@ defineExpose({
 			:library-id="libraryId"
 			:preferred-file-id="selectedFile.id"
 			:initial-annotations="annotations"
+			@update:annotations="annotations = $event"
 			@close="isPerformanceMode = false" />
 		</div>
 	</FullscreenShell>

@@ -116,5 +116,19 @@ test.describe('Performance Mode Always-On Stylus Drawing', () => {
 
 		await page.waitForTimeout(150)
 		expect(savedAnnotations.length).toBe(countBeforeConcertPen)
+
+		// Unlock Concert Mode, exit Performance Mode, and confirm the stylus stroke is visible in SongViewer
+		const unlockBtn = dialog.locator('[data-test="concert-mode-unlock-button"]')
+		const lockBox = await unlockBtn.boundingBox()
+		expect(lockBox).not.toBeNull()
+		await page.mouse.move(lockBox!.x + lockBox!.width / 2, lockBox!.y + lockBox!.height / 2)
+		await page.mouse.down()
+		await page.waitForTimeout(750)
+		await page.mouse.up()
+		await expect(dialog).toHaveAttribute('data-concert-mode', 'false')
+
+		await dialog.locator('[data-test="stop-performance-button"]').click()
+		await expect(dialog).toBeHidden()
+		await expect(page.locator(`[data-ann-uuid="${String(savedAnnotations[0].uuid)}"]`).first()).toBeVisible()
 	})
 })
