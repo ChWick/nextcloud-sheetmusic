@@ -55,7 +55,8 @@ function clearLongPress() {
 	}
 }
 
-function onMainPointerDown() {
+function onMainPointerDown(event: PointerEvent) {
+	if (event.pointerType === 'mouse' && event.button !== 0) return
 	if (!props.longPressMs || props.longPressMs <= 0) return
 	longPressTriggered = false
 	clearLongPress()
