@@ -142,4 +142,46 @@ describe('usePerformanceStageInput', () => {
 
 		wrapper.unmount()
 	})
+
+	it('routes Spacebar to onSpace and scroll-mode taps to onStageTap when handled', () => {
+		let handleSpace = true
+		let handleTap = true
+		let spaceCalls = 0
+		let tapCalls = 0
+		const { wrapper, api, onNextPage, onToggleHud } = setupHarness(() => true, {
+			onSpace: () => {
+				spaceCalls += 1
+				return handleSpace
+			},
+			onStageTap: () => {
+				tapCalls += 1
+				return handleTap
+			},
+		})
+
+		// Handled by onSpace -> does not advance page
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }))
+		expect(spaceCalls).toBe(1)
+		expect(onNextPage).not.toHaveBeenCalled()
+
+		// Not handled by onSpace -> falls back to onNextPage
+		handleSpace = false
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }))
+		expect(spaceCalls).toBe(2)
+		expect(onNextPage).toHaveBeenCalledTimes(1)
+
+		// Handled by onStageTap in scroll mode -> does not toggle HUD
+		const mockEl = { getBoundingClientRect: () => ({ left: 0, width: 400 }) } as unknown as HTMLElement
+		api.onStageClick({ currentTarget: mockEl, clientX: 200 } as unknown as MouseEvent)
+		expect(tapCalls).toBe(1)
+		expect(onToggleHud).not.toHaveBeenCalled()
+
+		// Not handled by onStageTap -> falls back to onToggleHud
+		handleTap = false
+		api.onStageClick({ currentTarget: mockEl, clientX: 200 } as unknown as MouseEvent)
+		expect(tapCalls).toBe(2)
+		expect(onToggleHud).toHaveBeenCalledTimes(1)
+
+		wrapper.unmount()
+	})
 })
