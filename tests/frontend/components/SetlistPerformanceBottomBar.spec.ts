@@ -32,8 +32,10 @@ describe('SetlistPerformanceBottomBar', () => {
 		await wrapper.find('[data-test="performance-bottom-night-toggle"]').trigger('click')
 		await wrapper.find('button[data-turn-mode="step"]').trigger('click')
 
-		const layoutSelect = wrapper.find('select[aria-label="Page layout"]')
-		await layoutSelect.setValue('single')
+		const layoutSelect = wrapper.findComponent({ name: 'NcSelect' })
+		expect(layoutSelect.exists()).toBe(true)
+		layoutSelect.vm.$emit('update:modelValue', { value: 'single', label: 'Single page' })
+		await wrapper.vm.$nextTick()
 
 		expect(wrapper.emitted('prevSong')).toHaveLength(1)
 		expect(wrapper.emitted('prevPage')).toHaveLength(1)

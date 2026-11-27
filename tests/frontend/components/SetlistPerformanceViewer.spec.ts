@@ -165,10 +165,9 @@ describe('SetlistPerformanceViewer', () => {
 			attachTo: document.body,
 		})
 
-		const layoutSelect = document.body.querySelector('select[aria-label="Page layout"]') as HTMLSelectElement | null
-		expect(layoutSelect).not.toBeNull()
-		layoutSelect!.value = 'double'
-		layoutSelect!.dispatchEvent(new Event('change'))
+		const layoutSelect = wrapper.findComponent({ name: 'NcSelect' })
+		expect(layoutSelect.exists()).toBe(true)
+		layoutSelect.vm.$emit('update:modelValue', { value: 'double', label: 'Two pages' })
 		await wrapper.vm.$nextTick()
 
 		// Advance to Song Two (which has a bookmark at page 3)
@@ -193,9 +192,8 @@ describe('SetlistPerformanceViewer', () => {
 			attachTo: document.body,
 		})
 
-		const layoutSelect = document.body.querySelector('select[aria-label="Page layout"]') as HTMLSelectElement | null
-		layoutSelect!.value = 'continuous'
-		layoutSelect!.dispatchEvent(new Event('change'))
+		const layoutSelect = wrapper.findComponent({ name: 'NcSelect' })
+		layoutSelect.vm.$emit('update:modelValue', { value: 'continuous', label: 'Scroll' })
 		await wrapper.vm.$nextTick()
 
 		const footer = document.body.querySelector('footer') as HTMLElement
@@ -227,9 +225,8 @@ describe('SetlistPerformanceViewer', () => {
 		})
 
 		// Change layout while override is off -> updates library default
-		const layoutSelect = document.body.querySelector('select[aria-label="Page layout"]') as HTMLSelectElement
-		layoutSelect.value = 'double'
-		layoutSelect.dispatchEvent(new Event('change'))
+		const layoutSelect = wrapper.findComponent({ name: 'NcSelect' })
+		layoutSelect.vm.$emit('update:modelValue', { value: 'double', label: 'Two pages' })
 		await wrapper.vm.$nextTick()
 
 		// Open Viewer Settings and enable custom settings for this setlist
@@ -243,17 +240,16 @@ describe('SetlistPerformanceViewer', () => {
 		setlistScopeBtn!.click()
 		await wrapper.vm.$nextTick()
 
-		layoutSelect.value = 'single'
-		layoutSelect.dispatchEvent(new Event('change'))
+		layoutSelect.vm.$emit('update:modelValue', { value: 'single', label: 'Single page' })
 		await wrapper.vm.$nextTick()
-		expect(layoutSelect.value).toBe('single')
+		expect((layoutSelect.props('modelValue') as { value: string }).value).toBe('single')
 
 		// Switch back to library defaults -> restores library default ('double')
 		const libraryScopeBtn = document.body.querySelector('button[data-settings-scope="library"]') as HTMLButtonElement | null
 		expect(libraryScopeBtn).not.toBeNull()
 		libraryScopeBtn!.click()
 		await wrapper.vm.$nextTick()
-		expect(layoutSelect.value).toBe('double')
+		expect((layoutSelect.props('modelValue') as { value: string }).value).toBe('double')
 
 		wrapper.unmount()
 	})

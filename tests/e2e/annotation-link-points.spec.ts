@@ -151,7 +151,9 @@ test.describe('Interactive Link Points (D.S. / Coda jumps)', () => {
 		await page.locator('[data-test="play-song-button"]').click()
 		const dialog = page.getByRole('dialog', { name: 'Symphony No. 5' })
 		await expect(dialog.locator('[data-test="performance-metronome-button"]')).toBeVisible()
-		await dialog.locator('select').first().selectOption('single')
+		const perfLayoutSelect = dialog.locator('[data-test="performance-layout-select"]')
+		await perfLayoutSelect.locator('.vs__dropdown-toggle').click()
+		await page.getByRole('option', { name: 'Single page' }).click()
 
 		// Verify seeded link renders in performance mode and click it to jump to page 3
 		const linkRect = dialog.locator('[data-test="annotation-link"]').first()

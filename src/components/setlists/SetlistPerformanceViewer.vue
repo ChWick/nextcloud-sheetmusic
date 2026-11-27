@@ -863,6 +863,7 @@ onUnmounted(() => {
 }
 
 .nightChrome {
+	color-scheme: dark;
 	--color-main-background: #141416;
 	--color-background-hover: #222226;
 	--color-background-dark: #26262b;

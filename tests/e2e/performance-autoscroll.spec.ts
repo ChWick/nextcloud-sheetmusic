@@ -33,9 +33,10 @@ test.describe('Performance Mode Auto-Scroll', () => {
 		await expect(pdfContainer).toBeVisible()
 
 		// Start from explicit Single page layout to verify Auto-Scroll automatically switches to Scroll (continuous)
-		const layoutSelect = dialog.getByRole('combobox', { name: 'Page layout' })
-		await layoutSelect.selectOption('single')
-		await expect(layoutSelect).toHaveValue('single')
+		const layoutSelect = dialog.locator('[data-test="performance-layout-select"]')
+		await layoutSelect.locator('.vs__dropdown-toggle').click()
+		await page.getByRole('option', { name: 'Single page' }).click()
+		await expect(layoutSelect).toContainText('Single page')
 
 		// Open Auto-Scroll popover via side arrow, bump logarithmic speed slider to ~120 px/s
 		await dialog.locator('[data-test="performance-autoscroll-menu"]').click()
@@ -52,7 +53,7 @@ test.describe('Performance Mode Auto-Scroll', () => {
 		// Start Auto-Scroll -> automatically switches to continuous scroll and advances real scrollTop
 		const toggleBtn = dialog.locator('[data-test="performance-autoscroll-toggle"]')
 		await toggleBtn.click()
-		await expect(layoutSelect).toHaveValue('continuous')
+		await expect(layoutSelect).toContainText('Scroll')
 		await expect(toggleBtn).toHaveAttribute('aria-pressed', 'true')
 
 		// Wait until the real 3-page PDF renders and scrollTop measurably advances

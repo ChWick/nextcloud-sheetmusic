@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import ArrowExpandHorizontalIcon from 'vue-material-design-icons/ArrowExpandHorizontal.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
@@ -18,7 +20,7 @@ import type { AutoScrollMode } from '../../composables/useAutoScroll'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 import type { PerformanceLayoutChoice, PerformanceZoomChoice, ScoreColorMode } from '../../utils/performance-settings'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
 	visible: boolean
 	hasPrevSong: boolean
 	hasNextSong: boolean
@@ -94,6 +96,27 @@ const emit = defineEmits<{
 	pauseAutoHide: []
 	resumeAutoHide: []
 }>()
+
+interface LayoutOption {
+	value: PerformanceLayoutChoice
+	label: string
+}
+
+const layoutOptions = computed<LayoutOption[]>(() => [
+	{ value: 'auto', label: t('sheetmusic', 'Auto (Tablet)') },
+	{ value: 'single', label: t('sheetmusic', 'Single page') },
+	{ value: 'double', label: t('sheetmusic', 'Two pages') },
+	{ value: 'continuous', label: t('sheetmusic', 'Scroll') },
+])
+
+const selectedLayoutOption = computed<LayoutOption>({
+	get: () => layoutOptions.value.find((o) => o.value === props.layoutChoice) ?? layoutOptions.value[0],
+	set: (opt) => {
+		if (opt?.value) {
+			emit('changeLayout', opt.value)
+		}
+	},
+})
 </script>
 
 <template>
@@ -163,24 +186,17 @@ const emit = defineEmits<{
 		</div>
 
 		<div :class="$style.modeGroup">
-			<select
-				:value="layoutChoice"
-				:aria-label="t('sheetmusic', 'Page layout')"
-				:class="$style.selectControl"
-				@change="emit('changeLayout', ($event.target as HTMLSelectElement).value as PerformanceLayoutChoice)">
-				<option value="auto">
-					{{ t('sheetmusic', 'Auto (Tablet)') }}
-				</option>
-				<option value="single">
-					{{ t('sheetmusic', 'Single page') }}
-				</option>
-				<option value="double">
-					{{ t('sheetmusic', 'Two pages') }}
-				</option>
-				<option value="continuous">
-					{{ t('sheetmusic', 'Scroll') }}
-				</option>
-			</select>
+			<NcSelect
+				v-model="selectedLayoutOption"
+				:options="layoutOptions"
+				label="label"
+				placement="top"
+				:clearable="false"
+				:input-label="t('sheetmusic', 'Page layout')"
+				:class="$style.layoutSelect"
+				data-test="performance-layout-select"
+				@open="emit('pauseAutoHide')"
+				@close="emit('resumeAutoHide')" />
 
 			<DoublePageTurnModeSelector
 				v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"
@@ -288,13 +304,21 @@ const emit = defineEmits<{
 	flex-wrap: wrap;
 }
 
-.selectControl {
-	height: 32px;
-	padding: 0 8px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background-color: var(--color-main-background);
+.layoutSelect {
+	width: 156px;
+	min-width: 146px;
+}
+
+.layoutSelect :deep(.vs__selected),
+.layoutSelect :deep(.vs__search) {
 	color: var(--color-main-text);
-	font-size: 0.85rem;
+}
+
+.layoutSelect :deep(.vs__open-indicator) {
+	fill: var(--color-main-text);
+}
+
+:global(.vs__dropdown-menu) {
+	z-index: 100030 !important;
 }
 </style>
