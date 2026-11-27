@@ -120,6 +120,35 @@ describe('ViewportPopover.vue', () => {
 		wrapper.unmount()
 		window.removeEventListener('keydown', onParentKeyDown)
 	})
+
+	it('does not intercept window Escape when detached, while direct pane Escape still closes', async () => {
+		let parentEscapeSeen = false
+		const onParentKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') parentEscapeSeen = true
+		}
+		window.addEventListener('keydown', onParentKeyDown)
+
+		const wrapper = mount(ViewportPopover, {
+			props: {
+				open: true,
+				paneTestId: 'detached-esc-pane',
+			},
+			slots: {
+				trigger: '<button data-test="trig">Open</button>',
+				default: '<p>Detached menu</p>',
+			},
+		})
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+		expect(parentEscapeSeen).toBe(true)
+		expect(wrapper.emitted('update:open')).toBeUndefined()
+
+		await wrapper.find('[data-test="detached-esc-pane"]').trigger('keydown.esc')
+		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
+
+		wrapper.unmount()
+		window.removeEventListener('keydown', onParentKeyDown)
+	})
 })
 
 describe('PdfInfoPopover.vue', () => {
