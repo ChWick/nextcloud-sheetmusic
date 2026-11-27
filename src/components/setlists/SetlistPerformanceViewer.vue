@@ -236,9 +236,6 @@ function toggleSettingsPanel() {
 	isSettingsOpen.value = !isSettingsOpen.value
 	if (isSettingsOpen.value) {
 		isDrawerOpen.value = false
-		clearHudTimer()
-	} else {
-		scheduleHudAutoHide()
 	}
 }
 
@@ -246,9 +243,6 @@ function toggleDrawer() {
 	isDrawerOpen.value = !isDrawerOpen.value
 	if (isDrawerOpen.value) {
 		isSettingsOpen.value = false
-		clearHudTimer()
-	} else {
-		scheduleHudAutoHide()
 	}
 }
 
@@ -646,25 +640,20 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 			return
 		}
 		if (toolsButtonsRef.value?.closeOpenPopover()) {
-			scheduleHudAutoHide()
-		} else if (isAutoScrollPopoverOpen.value) {
+			return
+		}
+		if (isAutoScrollPopoverOpen.value) {
 			isAutoScrollPopoverOpen.value = false
-			scheduleHudAutoHide()
 		} else if (isAppearancePopoverOpen.value) {
 			isAppearancePopoverOpen.value = false
-			scheduleHudAutoHide()
 		} else if (isPagePickerOpen.value) {
 			isPagePickerOpen.value = false
-			scheduleHudAutoHide()
 		} else if (isSupplementalDrawerOpen.value) {
 			isSupplementalDrawerOpen.value = false
-			scheduleHudAutoHide()
 		} else if (isSettingsOpen.value) {
 			isSettingsOpen.value = false
-			scheduleHudAutoHide()
 		} else if (isDrawerOpen.value) {
 			isDrawerOpen.value = false
-			scheduleHudAutoHide()
 		} else {
 			emit('close')
 		}

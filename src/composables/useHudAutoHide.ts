@@ -2,6 +2,9 @@ import { onUnmounted, ref, watch } from 'vue'
 
 /**
  * Manages auto-hiding HUD visibility with inactivity timeout and pause/resume guards.
+ *
+ * @param timeoutMs - Inactivity delay in milliseconds before hiding the HUD.
+ * @param isBlocked - Reactive getter returning true while a drawer or popover keeps the HUD open.
  */
 export function useHudAutoHide(
 	timeoutMs = 3000,
