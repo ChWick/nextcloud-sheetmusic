@@ -37,6 +37,7 @@ vi.mock('../../../src/components/FilePreviewer.vue', () => ({
 			'initialPageLayout',
 			'initialDoublePageTurnMode',
 			'initialZoomMode',
+			'lockZoom',
 		],
 		setup(_props: unknown, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
 			expose({
@@ -55,7 +56,7 @@ vi.mock('../../../src/components/FilePreviewer.vue', () => ({
 			})
 			return {}
 		},
-		template: '<div class="mock-file-previewer" :data-file-path="filePath" :data-target-page="targetPage" :data-initial-layout="initialPageLayout" />',
+		template: '<div class="mock-file-previewer" :data-file-path="filePath" :data-target-page="targetPage" :data-initial-layout="initialPageLayout" :data-lock-zoom="String(Boolean(lockZoom))" />',
 	},
 }))
 
@@ -361,6 +362,7 @@ describe('SetlistPerformanceViewer', () => {
 		const header = document.body.querySelector('header') as HTMLElement
 		const footer = document.body.querySelector('footer') as HTMLElement
 		expect(overlay.getAttribute('data-concert-mode')).toBe('true')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-lock-zoom')).toBe('true')
 		expect(header.style.display).toBe('none')
 		expect(footer.style.display).toBe('none')
 
@@ -369,12 +371,20 @@ describe('SetlistPerformanceViewer', () => {
 		await wrapper.vm.$nextTick()
 		expect(wrapper.emitted('close')).toBeUndefined()
 
-		// Unlocking via ConcertModeUnlockBadge restores HUD
+		// Page turns remain active while locked
+		mockNextPage.mockReturnValueOnce(false)
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
+		await wrapper.vm.$nextTick()
+		expect(document.body.textContent).toContain('Song Two')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-lock-zoom')).toBe('true')
+
+		// Unlocking via ConcertModeUnlockBadge restores HUD and unlocks zoom
 		const badge = wrapper.findComponent({ name: 'ConcertModeUnlockBadge' })
 		expect(badge.exists()).toBe(true)
 		badge.vm.$emit('unlock')
 		await wrapper.vm.$nextTick()
 		expect(overlay.getAttribute('data-concert-mode')).toBe('false')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-lock-zoom')).toBe('false')
 		expect(header.style.display).not.toBe('none')
 		expect(footer.style.display).not.toBe('none')
 
