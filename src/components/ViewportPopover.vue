@@ -59,7 +59,7 @@ function close() {
 }
 
 function onWindowKeyDown(e: KeyboardEvent) {
-	if (e.key === 'Escape' && props.open) {
+	if (e.key === 'Escape' && props.open && wrapRef.value?.isConnected) {
 		e.stopPropagation()
 		e.preventDefault()
 		close()
@@ -94,7 +94,8 @@ onUnmounted(() => {
 			ref="paneRef"
 			:class="[$style.popoverPane, paneClass]"
 			:style="popoverPositionStyle"
-			:data-test="paneTestId">
+			:data-test="paneTestId"
+			@keydown.esc.stop.prevent="close">
 			<div v-if="title" :class="$style.popoverHeader">
 				<strong>{{ title }}</strong>
 				<button
