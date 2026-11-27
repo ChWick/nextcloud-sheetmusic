@@ -6,6 +6,9 @@
 [![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)](https://www.php.net/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
+> [!WARNING]
+> **Vibe-coded project.** Sheet Music is built through a fast, AI-assisted and experimentation-driven workflow. It is actively evolving: please review changes carefully and avoid using it as the only copy of important data until you have tested it in your own Nextcloud environment.
+
 **Sheet Music** is a comprehensive sheet music management, organization, and synchronization platform built natively for Nextcloud.
 
 Whether you are a solo musician, choir director, orchestra member, or band leader, Sheet Music turns your Nextcloud instance into a centralized sheet music hub. It provides an intuitive web interface for browsing, editing, viewing, and processing scores, while serving as a seamless synchronization backend for digital sheet music readers—most notably **[MobileSheets](https://www.zubersoft.com/mobilesheets/)** across Android, iPadOS/iOS, and Windows.
