@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import { useClickOutside } from '../composables/useClickOutside'
 import { useViewportPopoverClamp } from '../composables/useViewportPopoverClamp'
@@ -57,6 +57,33 @@ function toggle() {
 function close() {
 	emit('update:open', false)
 }
+
+function onWindowKeyDown(e: KeyboardEvent) {
+	if (e.key === 'Escape' && props.open) {
+		e.stopPropagation()
+		e.preventDefault()
+		close()
+	}
+}
+
+watch(
+	() => props.open,
+	(isOpen) => {
+		if (typeof window === 'undefined') return
+		if (isOpen) {
+			window.addEventListener('keydown', onWindowKeyDown, true)
+		} else {
+			window.removeEventListener('keydown', onWindowKeyDown, true)
+		}
+	},
+	{ immediate: true, flush: 'sync' },
+)
+
+onUnmounted(() => {
+	if (typeof window !== 'undefined') {
+		window.removeEventListener('keydown', onWindowKeyDown, true)
+	}
+})
 </script>
 
 <template>

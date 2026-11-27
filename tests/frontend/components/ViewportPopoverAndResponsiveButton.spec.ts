@@ -91,6 +91,34 @@ describe('ViewportPopover.vue', () => {
 
 		await pane.find('button').trigger('click')
 		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
+		wrapper.unmount()
+	})
+
+	it('closes on Escape in capture phase even when focus is outside the pane', async () => {
+		let parentEscapeSeen = false
+		const onParentKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') parentEscapeSeen = true
+		}
+		window.addEventListener('keydown', onParentKeyDown)
+
+		const wrapper = mount(ViewportPopover, {
+			props: {
+				open: true,
+				paneTestId: 'esc-pane',
+			},
+			slots: {
+				trigger: '<button data-test="trig">Open</button>',
+				default: '<p>Menu</p>',
+			},
+			attachTo: document.body,
+		})
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
+		expect(parentEscapeSeen).toBe(false)
+
+		wrapper.unmount()
+		window.removeEventListener('keydown', onParentKeyDown)
 	})
 })
 

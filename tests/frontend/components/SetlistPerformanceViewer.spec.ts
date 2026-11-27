@@ -128,6 +128,7 @@ describe('SetlistPerformanceViewer', () => {
 		const stepButton = document.body.querySelector('button[data-turn-mode="step"]') as HTMLButtonElement | null
 		expect(stepButton).not.toBeNull()
 		stepButton!.click()
+		await wrapper.vm.$nextTick()
 		expect(mockSetDoublePageTurnMode).toHaveBeenCalledWith('step')
 
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
