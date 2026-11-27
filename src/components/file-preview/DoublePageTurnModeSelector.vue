@@ -4,6 +4,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ViewportPopover from '../ViewportPopover.vue'
+import DoublePageTurnDiagram from './DoublePageTurnDiagram.vue'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 
 const props = defineProps<{
@@ -86,87 +87,10 @@ defineExpose({ close })
 				:data-active-turn-mode="activeOption.mode"
 				@click="toggle">
 				<span :class="$style.triggerContent">
-					<svg
-						:class="$style.icon"
-						viewBox="0 0 74 22"
-						width="78"
-						height="24"
-						aria-hidden="true">
-						<g :class="$style.startSpread">
-							<rect
-								x="1"
-								y="2"
-								width="13"
-								height="18"
-								rx="1.8"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4" />
-							<text
-								x="7.5"
-								y="14.5"
-								text-anchor="middle"
-								font-size="10"
-								font-weight="600"
-								fill="currentColor">1</text>
-							<rect
-								x="15.5"
-								y="2"
-								width="13"
-								height="18"
-								rx="1.8"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4" />
-							<text
-								x="22"
-								y="14.5"
-								text-anchor="middle"
-								font-size="10"
-								font-weight="600"
-								fill="currentColor">2</text>
-						</g>
-						<path
-							d="M31.5 11 H41.5 M38 7.5 L41.5 11 L38 14.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.6"
-							stroke-linecap="round"
-							stroke-linejoin="round" />
-						<rect
-							x="44.5"
-							y="2"
-							width="13"
-							height="18"
-							rx="1.8"
-							:fill="activeOption.highlightLeft ? 'currentColor' : 'none'"
-							:fill-opacity="activeOption.highlightLeft ? 0.18 : 0"
-							stroke="currentColor"
-							stroke-width="1.5" />
-						<text
-							x="51"
-							y="14.5"
-							text-anchor="middle"
-							font-size="10"
-							font-weight="700"
-							fill="currentColor">{{ activeOption.leftNum }}</text>
-						<rect
-							x="59"
-							y="2"
-							width="13"
-							height="18"
-							rx="1.8"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5" />
-						<text
-							x="65.5"
-							y="14.5"
-							text-anchor="middle"
-							font-size="10"
-							font-weight="700"
-							fill="currentColor">{{ activeOption.rightNum }}</text>
-					</svg>
+					<DoublePageTurnDiagram
+						:left-num="activeOption.leftNum"
+						:right-num="activeOption.rightNum"
+						:highlight-left="activeOption.highlightLeft" />
 					<ChevronDownIcon :size="18" :class="[$style.chevron, isOpen && $style.chevronOpen]" />
 				</span>
 			</NcButton>
@@ -184,87 +108,10 @@ defineExpose({ close })
 				:aria-checked="modelValue === opt.mode"
 				:data-turn-mode="opt.mode"
 				@click="selectMode(opt.mode)">
-				<svg
-					:class="$style.icon"
-					viewBox="0 0 74 22"
-					width="78"
-					height="24"
-					aria-hidden="true">
-					<g :class="$style.startSpread">
-						<rect
-							x="1"
-							y="2"
-							width="13"
-							height="18"
-							rx="1.8"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4" />
-						<text
-							x="7.5"
-							y="14.5"
-							text-anchor="middle"
-							font-size="10"
-							font-weight="600"
-							fill="currentColor">1</text>
-						<rect
-							x="15.5"
-							y="2"
-							width="13"
-							height="18"
-							rx="1.8"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4" />
-						<text
-							x="22"
-							y="14.5"
-							text-anchor="middle"
-							font-size="10"
-							font-weight="600"
-							fill="currentColor">2</text>
-					</g>
-					<path
-						d="M31.5 11 H41.5 M38 7.5 L41.5 11 L38 14.5"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.6"
-						stroke-linecap="round"
-						stroke-linejoin="round" />
-					<rect
-						x="44.5"
-						y="2"
-						width="13"
-						height="18"
-						rx="1.8"
-						:fill="opt.highlightLeft ? 'currentColor' : 'none'"
-						:fill-opacity="opt.highlightLeft ? 0.18 : 0"
-						stroke="currentColor"
-						stroke-width="1.5" />
-					<text
-						x="51"
-						y="14.5"
-						text-anchor="middle"
-						font-size="10"
-						font-weight="700"
-						fill="currentColor">{{ opt.leftNum }}</text>
-					<rect
-						x="59"
-						y="2"
-						width="13"
-						height="18"
-						rx="1.8"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.5" />
-					<text
-						x="65.5"
-						y="14.5"
-						text-anchor="middle"
-						font-size="10"
-						font-weight="700"
-						fill="currentColor">{{ opt.rightNum }}</text>
-				</svg>
+				<DoublePageTurnDiagram
+					:left-num="opt.leftNum"
+					:right-num="opt.rightNum"
+					:highlight-left="opt.highlightLeft" />
 				<span :class="$style.menuLabel">{{ opt.shortLabel }}</span>
 			</button>
 		</div>
@@ -291,15 +138,6 @@ defineExpose({ close })
 
 .chevronOpen {
 	transform: rotate(180deg);
-}
-
-.icon {
-	display: block;
-	flex-shrink: 0;
-}
-
-.startSpread {
-	opacity: 0.72;
 }
 
 .menuPane {
