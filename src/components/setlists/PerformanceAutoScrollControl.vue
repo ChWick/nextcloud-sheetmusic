@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
-import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import PauseIcon from 'vue-material-design-icons/Pause.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import LogRangeSlider from '../LogRangeSlider.vue'
-import ViewportPopover from '../ViewportPopover.vue'
+import SplitPopoverButton from '../SplitPopoverButton.vue'
 import type { AutoScrollMode } from '../../composables/useAutoScroll'
 import {
 	AUTO_SCROLL_SPEED_MAX,
@@ -41,15 +39,6 @@ const emit = defineEmits<{
 	'update:open': [open: boolean]
 }>()
 
-const internalOpen = ref(false)
-const isOpen = computed({
-	get: () => (props.open !== undefined ? props.open : internalOpen.value),
-	set: (val: boolean) => {
-		internalOpen.value = val
-		emit('update:open', val)
-	},
-})
-
 const isActive = computed(() => props.isRunning || props.countdownRemaining > 0)
 const hasSongDuration = computed(() => Boolean(props.songDurationSeconds && props.songDurationSeconds > 0))
 const formattedDuration = computed(() =>
@@ -64,46 +53,29 @@ const toggleLabel = computed(() => {
 </script>
 
 <template>
-	<ViewportPopover
-		v-model:open="isOpen"
-		:title="t('sheetmusic', 'Auto-scroll')"
-		pane-test-id="performance-autoscroll-popover"
-		:pane-class="$style.popoverPane"
-		:gap="6">
-		<template #trigger="{ toggle }">
-			<div :class="$style.splitGroup">
-				<NcButton
-					:variant="isActive || isPaused ? 'primary' : 'secondary'"
-					:class="$style.mainBtn"
-					:aria-pressed="isActive"
-					:aria-label="toggleLabel"
-					:title="toggleLabel"
-					data-test="performance-autoscroll-toggle"
-					@click="emit('toggle')">
-					<template #icon>
-						<PauseIcon v-if="isActive" :size="20" />
-						<PlayIcon v-else :size="20" />
-					</template>
-					<template v-if="countdownRemaining > 0">
-						{{ countdownRemaining }}s
-					</template>
-					<template v-else-if="isRunning">
-						{{ mode === 'duration' && formattedDuration ? formattedDuration : `${speedPxPerSec}` }}
-					</template>
-				</NcButton>
-				<NcButton
-					:variant="isOpen || isActive || isPaused ? 'primary' : 'secondary'"
-					:class="$style.arrowBtn"
-					:aria-expanded="isOpen"
-					:aria-label="t('sheetmusic', 'Auto-scroll options')"
-					:title="t('sheetmusic', 'Auto-scroll options')"
-					data-test="performance-autoscroll-menu"
-					@click="toggle">
-					<template #icon>
-						<ChevronDownIcon :size="18" />
-					</template>
-				</NcButton>
-			</div>
+	<SplitPopoverButton
+		:open="open"
+		:popover-title="t('sheetmusic', 'Auto-scroll')"
+		popover-test-id="performance-autoscroll-popover"
+		:active="isActive || isPaused"
+		:pressed="isActive"
+		:main-label="toggleLabel"
+		main-test-id="performance-autoscroll-toggle"
+		:menu-label="t('sheetmusic', 'Auto-scroll options')"
+		menu-test-id="performance-autoscroll-menu"
+		@click="emit('toggle')"
+		@update:open="emit('update:open', $event)">
+		<template #icon>
+			<PauseIcon v-if="isActive" :size="20" />
+			<PlayIcon v-else :size="20" />
+		</template>
+		<template #label>
+			<template v-if="countdownRemaining > 0">
+				{{ countdownRemaining }}s
+			</template>
+			<template v-else-if="isRunning">
+				{{ mode === 'duration' && formattedDuration ? formattedDuration : `${speedPxPerSec}` }}
+			</template>
 		</template>
 
 		<div :class="$style.panel">
@@ -192,34 +164,10 @@ const toggleLabel = computed(() => {
 				<span :class="$style.shortcutHint">{{ t('sheetmusic', 'Space: pause/resume') }}</span>
 			</div>
 		</div>
-	</ViewportPopover>
+	</SplitPopoverButton>
 </template>
 
 <style module>
-.splitGroup {
-	display: inline-flex;
-	align-items: center;
-}
-
-.mainBtn {
-	border-top-right-radius: 0 !important;
-	border-bottom-right-radius: 0 !important;
-	margin-right: 0 !important;
-}
-
-.arrowBtn {
-	border-top-left-radius: 0 !important;
-	border-bottom-left-radius: 0 !important;
-	margin-left: 1px !important;
-	min-width: 24px !important;
-	padding-left: 2px !important;
-	padding-right: 2px !important;
-}
-
-.popoverPane {
-	width: 280px;
-}
-
 .panel {
 	display: flex;
 	flex-direction: column;
