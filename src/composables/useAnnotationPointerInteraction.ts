@@ -758,6 +758,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 	function onOverlayClick(e: MouseEvent) {
 		if (lastQuickDrawPenAt > 0 && Date.now() - lastQuickDrawPenAt < 350) {
+			lastQuickDrawPenAt = 0
 			e.stopPropagation()
 			e.preventDefault()
 		}

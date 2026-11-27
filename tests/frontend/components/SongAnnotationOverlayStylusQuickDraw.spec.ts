@@ -95,6 +95,10 @@ describe('SongAnnotationOverlay Always-On Stylus Quick-Draw (no mocks)', () => {
 		expect(draft.data?.points?.length).toBeGreaterThanOrEqual(2)
 		expect(parentClickCount).toBe(2)
 
+		// A subsequent real tap immediately after the suppressed pen click still bubbles to the stage
+		svg.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+		expect(parentClickCount).toBe(3)
+
 		wrapper.unmount()
 		host.remove()
 	})
