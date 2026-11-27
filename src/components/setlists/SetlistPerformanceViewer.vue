@@ -12,6 +12,7 @@ import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplement
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
 import PerformanceToolsButtons from './PerformanceToolsButtons.vue'
 import { fetchSongAnnotations } from '../../api/annotations'
+import { useAutoScroll } from '../../composables/useAutoScroll'
 import { useHudAutoHide } from '../../composables/useHudAutoHide'
 import { useMetronome } from '../../composables/useMetronome'
 import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
@@ -87,6 +88,7 @@ const isSupplementalDrawerOpen = ref(false)
 const isPagePickerOpen = ref(false)
 const isToolsPopoverOpen = ref(false)
 const isAppearancePopoverOpen = ref(false)
+const isAutoScrollPopoverOpen = ref(false)
 const isFullscreen = ref(typeof document !== 'undefined' && Boolean(document.fullscreenElement))
 let keepFullscreenOnUnmount = false
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
@@ -118,6 +120,18 @@ const zoomChoice = ref<PerformanceZoomChoice>(initialSettings.settings.zoomChoic
 
 const metronome = useMetronome()
 const pitchPipe = usePitchPipe()
+const autoScroll = useAutoScroll({
+	getContainer: () => previewerRef.value?.getScrollContainer?.() ?? null,
+	getSongDurationSeconds: () => currentSong.value?.duration ?? null,
+	onBeforeStart: () => {
+		if (effectiveLayout.value !== 'continuous') {
+			onLayoutChange('continuous')
+		}
+	},
+	initialSpeed: initialSettings.settings.autoScrollSpeed,
+	initialDelay: initialSettings.settings.autoScrollDelay,
+	onSettingsChange: () => persistCurrentSettings(),
+})
 
 const {
 	isHudVisible,
@@ -132,7 +146,8 @@ const {
 	|| isSupplementalDrawerOpen.value
 	|| isPagePickerOpen.value
 	|| isToolsPopoverOpen.value
-	|| isAppearancePopoverOpen.value,
+	|| isAppearancePopoverOpen.value
+	|| isAutoScrollPopoverOpen.value,
 )
 
 useWakeLock()
@@ -149,6 +164,8 @@ function currentViewerSettings(): PerformanceViewerSettings {
 		scoreColorMode: scoreColorMode.value,
 		scoreBrightness: scoreBrightness.value,
 		scoreSepia: scoreSepia.value,
+		autoScrollSpeed: autoScroll.speedPxPerSec.value,
+		autoScrollDelay: autoScroll.startDelaySeconds.value,
 	}
 }
 
@@ -184,6 +201,7 @@ function applySettingsToPreviewer(settings: PerformanceViewerSettings) {
 	backgroundColor.value = settings.backgroundColor
 	tightCrop.value = settings.tightCrop
 	applyScoreAppearance(settings)
+	autoScroll.applySettings(settings)
 }
 
 function toggleSetlistOverride(enabled: boolean) {
@@ -520,8 +538,25 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 	onNextPage: handleNextPage,
 	onPrevPage: handlePrevPage,
 	onToggleHud: toggleHud,
+	onSpace: () => {
+		if (effectiveLayout.value === 'continuous' || autoScroll.isActive.value || autoScroll.isPaused.value) {
+			autoScroll.toggle()
+			return true
+		}
+		return false
+	},
+	onStageTap: () => {
+		if (autoScroll.isActive.value) {
+			autoScroll.pause()
+			return true
+		}
+		return false
+	},
 	onEscape: () => {
 		if (toolsButtonsRef.value?.closeOpenPopover()) {
+			scheduleHudAutoHide()
+		} else if (isAutoScrollPopoverOpen.value) {
+			isAutoScrollPopoverOpen.value = false
 			scheduleHudAutoHide()
 		} else if (isAppearancePopoverOpen.value) {
 			isAppearancePopoverOpen.value = false
@@ -536,6 +571,10 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 			emit('close')
 		}
 	},
+})
+
+watch(currentIndex, () => {
+	autoScroll.stop()
 })
 
 onMounted(() => {
@@ -678,6 +717,23 @@ onUnmounted(() => {
 				</div>
 
 				<button
+					v-if="(autoScroll.isActive.value || autoScroll.isPaused.value) && !isHudVisible"
+					type="button"
+					:class="$style.autoScrollPill"
+					data-test="performance-autoscroll-pill"
+					@click.stop="autoScroll.toggle()">
+					<template v-if="autoScroll.countdownRemaining.value > 0">
+						{{ t('sheetmusic', 'Auto-scroll in {sec}s…', { sec: autoScroll.countdownRemaining.value }) }}
+					</template>
+					<template v-else-if="autoScroll.isRunning.value">
+						{{ t('sheetmusic', 'Auto-scrolling · Tap to pause') }}
+					</template>
+					<template v-else>
+						{{ t('sheetmusic', 'Auto-scroll paused · Tap to resume') }}
+					</template>
+				</button>
+
+				<button
 					v-if="files.length > 0 && isHudVisible && !isSupplementalDrawerOpen"
 					type="button"
 					:class="$style.supplementalEdgeButton"
@@ -718,6 +774,14 @@ onUnmounted(() => {
 				:score-brightness="scoreBrightness"
 				:score-sepia="scoreSepia"
 				:is-appearance-popover-open="isAppearancePopoverOpen"
+				:auto-scroll-mode="autoScroll.mode.value"
+				:auto-scroll-speed="autoScroll.speedPxPerSec.value"
+				:auto-scroll-delay="autoScroll.startDelaySeconds.value"
+				:auto-scroll-running="autoScroll.isRunning.value"
+				:auto-scroll-paused="autoScroll.isPaused.value"
+				:auto-scroll-countdown="autoScroll.countdownRemaining.value"
+				:song-duration-seconds="currentSong?.duration ?? null"
+				:is-auto-scroll-popover-open="isAutoScrollPopoverOpen"
 				:is-page-picker-open="isPagePickerOpen"
 				:is-drawer-open="isDrawerOpen"
 				:show-setlist-controls="!isSingleSongMode"
@@ -735,6 +799,13 @@ onUnmounted(() => {
 				@update:score-brightness="onUpdateScoreBrightness"
 				@update:score-sepia="onUpdateScoreSepia"
 				@update:appearance-popover-open="isAppearancePopoverOpen = $event"
+				@toggle-auto-scroll="autoScroll.toggle()"
+				@reset-auto-scroll-top="autoScroll.resetToTop()"
+				@update:auto-scroll-mode="autoScroll.setMode($event)"
+				@update:auto-scroll-speed="autoScroll.setSpeed($event)"
+				@adjust-auto-scroll-speed="autoScroll.adjustSpeed($event)"
+				@update:auto-scroll-delay="autoScroll.setStartDelay($event)"
+				@update:auto-scroll-popover-open="isAutoScrollPopoverOpen = $event"
 				@toggle-page-picker="isPagePickerOpen = !isPagePickerOpen"
 				@toggle-drawer="toggleDrawer"
 				@pause-auto-hide="pauseHudAutoHide"
@@ -818,6 +889,25 @@ onUnmounted(() => {
 	margin: auto;
 	padding: 24px;
 	color: var(--color-text-maxcontrast);
+}
+
+button[type='button'].autoScrollPill {
+	position: absolute;
+	bottom: 18px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 26;
+	margin: 0;
+	padding: 6px 14px;
+	border: 1px solid var(--color-primary-element, #0082c9);
+	border-radius: 999px;
+	background: var(--color-main-background, #ffffff);
+	color: var(--color-main-text, #222222);
+	font-size: 0.8rem;
+	font-weight: 600;
+	opacity: 0.88;
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
+	cursor: pointer;
 }
 
 .supplementalEdgeButton {

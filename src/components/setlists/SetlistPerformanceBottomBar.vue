@@ -13,6 +13,8 @@ import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import ViewGridOutlineIcon from 'vue-material-design-icons/ViewGridOutline.vue'
 import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
 import NightModeSplitButton from '../song-viewer/NightModeSplitButton.vue'
+import PerformanceAutoScrollControl from './PerformanceAutoScrollControl.vue'
+import type { AutoScrollMode } from '../../composables/useAutoScroll'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 import type { PerformanceLayoutChoice, PerformanceZoomChoice, ScoreColorMode } from '../../utils/performance-settings'
 
@@ -34,6 +36,14 @@ withDefaults(defineProps<{
 	scoreBrightness?: number
 	scoreSepia?: number
 	isAppearancePopoverOpen?: boolean
+	autoScrollMode?: AutoScrollMode
+	autoScrollSpeed?: number
+	autoScrollDelay?: number
+	autoScrollRunning?: boolean
+	autoScrollPaused?: boolean
+	autoScrollCountdown?: number
+	songDurationSeconds?: number | null
+	isAutoScrollPopoverOpen?: boolean
 	isPagePickerOpen?: boolean
 	isDrawerOpen?: boolean
 	showSetlistControls?: boolean
@@ -44,6 +54,14 @@ withDefaults(defineProps<{
 	scoreBrightness: 100,
 	scoreSepia: 0,
 	isAppearancePopoverOpen: undefined,
+	autoScrollMode: 'speed',
+	autoScrollSpeed: 35,
+	autoScrollDelay: 0,
+	autoScrollRunning: false,
+	autoScrollPaused: false,
+	autoScrollCountdown: 0,
+	songDurationSeconds: null,
+	isAutoScrollPopoverOpen: undefined,
 	isPagePickerOpen: false,
 	isDrawerOpen: false,
 	showSetlistControls: true,
@@ -64,6 +82,13 @@ const emit = defineEmits<{
 	'update:scoreBrightness': [brightness: number]
 	'update:scoreSepia': [sepia: number]
 	'update:appearancePopoverOpen': [open: boolean]
+	toggleAutoScroll: []
+	resetAutoScrollTop: []
+	'update:autoScrollMode': [mode: AutoScrollMode]
+	'update:autoScrollSpeed': [speed: number]
+	adjustAutoScrollSpeed: [delta: number]
+	'update:autoScrollDelay': [delay: number]
+	'update:autoScrollPopoverOpen': [open: boolean]
 	togglePagePicker: []
 	toggleDrawer: []
 	pauseAutoHide: []
@@ -189,6 +214,23 @@ const emit = defineEmits<{
 				@click="emit('toggleTightCrop')">
 				<template #icon><CropIcon :size="18" /></template>
 			</NcButton>
+
+			<PerformanceAutoScrollControl
+				:open="isAutoScrollPopoverOpen"
+				:mode="autoScrollMode"
+				:speed-px-per-sec="autoScrollSpeed"
+				:start-delay-seconds="autoScrollDelay"
+				:is-running="autoScrollRunning"
+				:is-paused="autoScrollPaused"
+				:countdown-remaining="autoScrollCountdown"
+				:song-duration-seconds="songDurationSeconds"
+				@toggle="emit('toggleAutoScroll')"
+				@reset-to-top="emit('resetAutoScrollTop')"
+				@update:mode="emit('update:autoScrollMode', $event)"
+				@update:speed-px-per-sec="emit('update:autoScrollSpeed', $event)"
+				@adjust-speed="emit('adjustAutoScrollSpeed', $event)"
+				@update:start-delay-seconds="emit('update:autoScrollDelay', $event)"
+				@update:open="emit('update:autoScrollPopoverOpen', $event)" />
 
 			<NightModeSplitButton
 				size="small"

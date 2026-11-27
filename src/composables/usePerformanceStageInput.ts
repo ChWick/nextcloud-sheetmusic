@@ -9,6 +9,10 @@ export interface PerformanceStageInputOptions {
 	onNextPage: () => void
 	onPrevPage: () => void
 	onToggleHud: () => void
+	/** Optional handler for Spacebar; returns true if handled (e.g. toggling auto-scroll). */
+	onSpace?: () => boolean
+	/** Optional handler for stage tap in scroll mode; returns true if handled (e.g. pausing active auto-scroll). */
+	onStageTap?: () => boolean
 	onEscape: () => void
 }
 
@@ -63,6 +67,9 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 			return
 		}
 		if (options.isScrollMode()) {
+			if (options.onStageTap?.()) {
+				return
+			}
 			options.onToggleHud()
 			return
 		}
@@ -84,9 +91,14 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
 		switch (event.key) {
+		case ' ':
+			event.preventDefault()
+			if (!options.onSpace?.()) {
+				options.onNextPage()
+			}
+			break
 		case 'ArrowRight':
 		case 'PageDown':
-		case ' ':
 		case 'Enter':
 			event.preventDefault()
 			options.onNextPage()
