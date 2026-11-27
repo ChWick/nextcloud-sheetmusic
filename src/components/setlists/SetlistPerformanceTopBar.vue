@@ -9,6 +9,7 @@ import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import LayersOutlineIcon from 'vue-material-design-icons/LayersOutline.vue'
+import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import StopIcon from 'vue-material-design-icons/Stop.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 import type { AnnotationLayer } from '../../types/annotation'
@@ -39,6 +40,7 @@ const emit = defineEmits<{
 	toggleAnnotations: []
 	toggleLayerVisibility: [layerId: number]
 	toggleSettings: []
+	enterConcertMode: []
 	toggleFullscreen: []
 	pauseAutoHide: []
 	resumeAutoHide: []
@@ -152,6 +154,14 @@ watch(isLayersOpen, (open) => {
 				<template v-if="isSetlistOverride">
 					{{ t('sheetmusic', 'Custom') }}
 				</template>
+			</NcButton>
+			<NcButton
+				variant="tertiary"
+				:title="t('sheetmusic', 'Concert Mode (lock toolbars & zoom)')"
+				:aria-label="t('sheetmusic', 'Enter Concert Mode')"
+				data-test="performance-concert-mode-button"
+				@click="emit('enterConcertMode')">
+				<template #icon><LockOutlineIcon :size="20" /></template>
 			</NcButton>
 			<NcButton
 				variant="tertiary"

@@ -96,6 +96,7 @@ const props = withDefaults(
 		scoreColorMode?: ScoreColorMode
 		scoreBrightness?: number
 		scoreSepia?: number
+		lockZoom?: boolean
 		fileId?: number
 		initialCropBoxes?: Record<string, NormalizedCropBox> | null
 		nextFileId?: number
@@ -132,6 +133,7 @@ const props = withDefaults(
 		scoreColorMode: 'normal',
 		scoreBrightness: SCORE_BRIGHTNESS_MAX,
 		scoreSepia: 0,
+		lockZoom: false,
 		fileId: undefined,
 		initialCropBoxes: null,
 		nextFileId: undefined,
@@ -938,7 +940,7 @@ const { wasRecentlyPinching, wasRecentlyDragging, resetPan } = usePdfTouchZoom({
 	containerRef: pdfContainer,
 	stageRef: pdfStage,
 	getCurrentScale: () => effectiveScale.value,
-	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value,
+	isEnabled: () => !props.lockZoom && isPdfFile.value && !isLoading.value && !errorMessage.value,
 	isAnnotating: () => props.editableAnnotations,
 	isTouchZoomLocked: () => stylusSettings.value.lockTouchZoomWhileAnnotating,
 	onCommitZoom: async (scale, onBeforeSwap) => {

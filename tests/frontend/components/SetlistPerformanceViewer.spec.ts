@@ -340,4 +340,44 @@ describe('SetlistPerformanceViewer', () => {
 			Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
 		}
 	})
+
+	it('locks HUD and Escape exit in Concert Mode while keeping page turns active until unlocked', async () => {
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				setlistName: 'Friday Gig',
+				items: sampleItems,
+				songs: sampleSongs,
+				libraryId: 1,
+			},
+			attachTo: document.body,
+		})
+
+		const lockBtn = document.body.querySelector('[data-test="performance-concert-mode-button"]') as HTMLButtonElement | null
+		expect(lockBtn).not.toBeNull()
+		lockBtn!.click()
+		await wrapper.vm.$nextTick()
+
+		const overlay = document.body.querySelector('[role="dialog"]') as HTMLElement
+		const header = document.body.querySelector('header') as HTMLElement
+		const footer = document.body.querySelector('footer') as HTMLElement
+		expect(overlay.getAttribute('data-concert-mode')).toBe('true')
+		expect(header.style.display).toBe('none')
+		expect(footer.style.display).toBe('none')
+
+		// Escape does not close performance mode while locked
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+		await wrapper.vm.$nextTick()
+		expect(wrapper.emitted('close')).toBeUndefined()
+
+		// Unlocking via ConcertModeUnlockBadge restores HUD
+		const badge = wrapper.findComponent({ name: 'ConcertModeUnlockBadge' })
+		expect(badge.exists()).toBe(true)
+		badge.vm.$emit('unlock')
+		await wrapper.vm.$nextTick()
+		expect(overlay.getAttribute('data-concert-mode')).toBe('false')
+		expect(header.style.display).not.toBe('none')
+		expect(footer.style.display).not.toBe('none')
+
+		wrapper.unmount()
+	})
 })

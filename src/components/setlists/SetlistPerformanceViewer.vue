@@ -10,6 +10,7 @@ import SetlistPerformancePageStrip, { type SetlistStripSong } from './SetlistPer
 import SetlistPerformanceSettingsPanel from './SetlistPerformanceSettingsPanel.vue'
 import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplementalDrawer.vue'
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
+import ConcertModeUnlockBadge from './ConcertModeUnlockBadge.vue'
 import PerformanceToolsButtons from './PerformanceToolsButtons.vue'
 import { fetchSongAnnotations } from '../../api/annotations'
 import { useAutoScroll } from '../../composables/useAutoScroll'
@@ -89,6 +90,7 @@ const isPagePickerOpen = ref(false)
 const isToolsPopoverOpen = ref(false)
 const isAppearancePopoverOpen = ref(false)
 const isAutoScrollPopoverOpen = ref(false)
+const isConcertMode = ref(false)
 const isFullscreen = ref(typeof document !== 'undefined' && Boolean(document.fullscreenElement))
 let keepFullscreenOnUnmount = false
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
@@ -525,6 +527,25 @@ function handleStop() {
 	emit('close')
 }
 
+function enterConcertMode() {
+	toolsButtonsRef.value?.closeOpenPopover()
+	isSettingsOpen.value = false
+	isDrawerOpen.value = false
+	isSupplementalDrawerOpen.value = false
+	isPagePickerOpen.value = false
+	isAppearancePopoverOpen.value = false
+	isAutoScrollPopoverOpen.value = false
+	isConcertMode.value = true
+	clearHudTimer()
+	isHudVisible.value = false
+}
+
+function exitConcertMode() {
+	isConcertMode.value = false
+	isHudVisible.value = true
+	scheduleHudAutoHide()
+}
+
 function handleFullscreenChange() {
 	isFullscreen.value = Boolean(document.fullscreenElement)
 }
@@ -537,7 +558,10 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 	canPanHorizontally: () => Boolean(previewerRef.value?.canPanHorizontally?.()),
 	onNextPage: handleNextPage,
 	onPrevPage: handlePrevPage,
-	onToggleHud: toggleHud,
+	onToggleHud: () => {
+		if (isConcertMode.value) return
+		toggleHud()
+	},
 	onSpace: () => {
 		if (effectiveLayout.value === 'continuous' || autoScroll.isActive.value || autoScroll.isPaused.value) {
 			autoScroll.toggle()
@@ -550,9 +574,12 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 			autoScroll.pause()
 			return true
 		}
-		return false
+		return isConcertMode.value
 	},
 	onEscape: () => {
+		if (isConcertMode.value) {
+			return
+		}
 		if (toolsButtonsRef.value?.closeOpenPopover()) {
 			scheduleHudAutoHide()
 		} else if (isAutoScrollPopoverOpen.value) {
@@ -598,11 +625,16 @@ onUnmounted(() => {
 			:class="[$style.overlay, isNightMode && $style.nightChrome]"
 			:style="effectiveOverlayBackground ? { backgroundColor: effectiveOverlayBackground } : undefined"
 			:data-night-chrome="isNightMode ? 'true' : 'false'"
+			:data-concert-mode="isConcertMode ? 'true' : 'false'"
 			role="dialog"
 			aria-modal="true"
 			:aria-label="setlistName || currentSongTitle">
+			<ConcertModeUnlockBadge
+				v-if="isConcertMode"
+				@unlock="exitConcertMode" />
+
 			<SetlistPerformanceTopBar
-				:visible="isHudVisible"
+				:visible="isHudVisible && !isConcertMode"
 				:setlist-name="setlistName"
 				:song-title="currentSongTitle"
 				:bookmark-name="currentItem?.bookmarkName"
@@ -620,6 +652,7 @@ onUnmounted(() => {
 				@toggle-annotations="onToggleAnnotations"
 				@toggle-layer-visibility="onToggleLayerVisibility"
 				@toggle-settings="toggleSettingsPanel"
+				@enter-concert-mode="enterConcertMode"
 				@toggle-fullscreen="toggleFullscreen"
 				@pause-auto-hide="pauseHudAutoHide"
 				@resume-auto-hide="resumeHudAutoHide">
@@ -708,6 +741,7 @@ onUnmounted(() => {
 					:score-color-mode="scoreColorMode"
 					:score-brightness="scoreBrightness"
 					:score-sepia="scoreSepia"
+					:lock-zoom="isConcertMode"
 					:file-id="currentFile?.fileId"
 					:initial-crop-boxes="currentFile?.cropBoxes ?? null"
 					:next-file-id="nextFile?.fileId"
@@ -734,7 +768,7 @@ onUnmounted(() => {
 				</button>
 
 				<button
-					v-if="files.length > 0 && isHudVisible && !isSupplementalDrawerOpen"
+					v-if="files.length > 0 && isHudVisible && !isConcertMode && !isSupplementalDrawerOpen"
 					type="button"
 					:class="$style.supplementalEdgeButton"
 					:aria-label="t('sheetmusic', 'Open setlist notes')"
@@ -757,7 +791,7 @@ onUnmounted(() => {
 				@resume-auto-hide="resumeHudAutoHide" />
 
 			<SetlistPerformanceBottomBar
-				:visible="isHudVisible"
+				:visible="isHudVisible && !isConcertMode"
 				:has-prev-song="hasPrevSong"
 				:has-next-song="hasNextSong"
 				:can-go-prev-page="Boolean(previewerRef?.canGoPrev)"
