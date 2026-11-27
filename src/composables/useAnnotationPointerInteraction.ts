@@ -4,7 +4,7 @@ import type {
 	SheetAnnotation,
 } from '../types/annotation'
 import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useAnnotationInlineEditors } from './useAnnotationInlineEditors'
 import { useHandwritingInput } from './useHandwritingInput'
 import { useStylusSettings } from './useStylusSettings'
@@ -58,6 +58,8 @@ export interface UseAnnotationPointerInteractionOptions {
 	pageNumber: ComputedRef<number>
 	totalPages: ComputedRef<number>
 	editable: ComputedRef<boolean>
+	/** When true (and editable is false), pen input immediately draws freehand strokes (or hardware-erases) while touch/mouse pass through. */
+	stylusQuickDraw?: ComputedRef<boolean>
 	activeTool: ComputedRef<EditorTool>
 	toolStyle: ComputedRef<EditorToolStyle>
 	activeAnnotations: ComputedRef<SheetAnnotation[]>
@@ -124,16 +126,44 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	const activeTouchPointers = new Set<number>()
 	let capturedPointerId: number | null = null
 	let isMultiTouchGesture = false
+	let lastQuickDrawPenAt = 0
+
+	function isStylusQuickDrawOnly(): boolean {
+		return Boolean(opts.stylusQuickDraw?.value && !opts.editable.value)
+	}
+
+	function effectiveTool(): EditorTool {
+		return isStylusQuickDrawOnly() ? 'drawing' : opts.activeTool.value
+	}
+
+	watch(
+		() => [opts.editable.value, Boolean(opts.stylusQuickDraw?.value)],
+		([isEditable, isQuickDraw]) => {
+			if (!isEditable && !isQuickDraw && interaction.value) {
+				cancelInteraction()
+			}
+		},
+	)
 
 	function capturePointer(pointerId: number) {
-		opts.svgRef.value?.setPointerCapture?.(pointerId)
-		capturedPointerId = pointerId
+		try {
+			opts.svgRef.value?.setPointerCapture?.(pointerId)
+			capturedPointerId = pointerId
+		} catch {
+			// Ignore capture errors when pointerId is not an active native pointer
+		}
 	}
 
 	function releaseCapturedPointer(pointerId?: number) {
 		const idToRelease = pointerId ?? capturedPointerId
-		if (idToRelease !== null && opts.svgRef.value?.hasPointerCapture?.(idToRelease)) {
-			opts.svgRef.value.releasePointerCapture(idToRelease)
+		if (idToRelease !== null) {
+			try {
+				if (opts.svgRef.value?.hasPointerCapture?.(idToRelease)) {
+					opts.svgRef.value.releasePointerCapture(idToRelease)
+				}
+			} catch {
+				// Ignore release errors
+			}
 		}
 		if (pointerId === undefined || capturedPointerId === pointerId) {
 			capturedPointerId = null
@@ -189,7 +219,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function shouldCapturePressure(): boolean {
-		return opts.activeTool.value === 'drawing'
+		return effectiveTool() === 'drawing'
 			&& opts.toolStyle.value.lineStyle === 'solid'
 			&& stylusSettings.value.pressureMode !== 'off'
 			&& stylusSettings.value.pressureSensitivity > 0
@@ -257,7 +287,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		strokePoints: NormalizedPoint[],
 	): Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> | null {
 		return buildAnnotationDraft(
-			opts.activeTool.value,
+			effectiveTool(),
 			opts.toolStyle.value,
 			opts.pageIndex.value,
 			p1,
@@ -267,12 +297,21 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function onPointerDown(e: PointerEvent) {
-		if (!opts.editable.value || e.ctrlKey || e.metaKey) return
+		const quickDrawOnly = isStylusQuickDrawOnly()
+		if ((!opts.editable.value && !quickDrawOnly) || e.ctrlKey || e.metaKey) return
+
+		if (quickDrawOnly && e.pointerType !== 'pen') {
+			return
+		}
 
 		handlePenTakeover(e)
 
 		const isHardwareErase = stylusSettings.value.hardwareEraser && isStylusEraserEvent(e)
 		if (e.button !== 0 && !isHardwareErase) return
+
+		if (quickDrawOnly) {
+			lastQuickDrawPenAt = Date.now()
+		}
 
 		if (e.pointerType === 'touch') {
 			if (
@@ -297,6 +336,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		if (isHardwareErase) {
 			e.preventDefault()
+			if (quickDrawOnly) {
+				e.stopPropagation()
+			}
 			const erasedUuids = new Set<string>()
 			eraseAnnotationByUuid(findAnnotationUuidAtStylusPoint(e), erasedUuids)
 			capturePointer(e.pointerId)
@@ -309,6 +351,30 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 				pointerType: e.pointerType,
 				erasedUuids,
 			}
+			return
+		}
+
+		if (quickDrawOnly) {
+			e.preventDefault()
+			e.stopPropagation()
+			capturePointer(e.pointerId)
+			const state: InteractionState = {
+				kind: 'draw',
+				pointerId: e.pointerId,
+				startNorm: pt,
+				currentNorm: pt,
+				points: [],
+				moved: false,
+				pointerType: e.pointerType,
+				pressureTracker: createStrokePressureTracker(e.pointerType),
+			}
+			const initialPressure = sampleStrokePressure(e, state)
+			const startPoint: NormalizedPoint = initialPressure !== undefined ? { ...pt, p: initialPressure } : pt
+			state.startNorm = startPoint
+			state.currentNorm = startPoint
+			state.points.push(startPoint)
+			interaction.value = state
+			setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
 			return
 		}
 
@@ -566,7 +632,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (state.kind === 'draw') {
-			const tool = opts.activeTool.value
+			const tool = effectiveTool()
 			if (tool === 'drawing' || tool === 'highlight' || tool === 'handwriting') {
 				for (const ev of getCoalescedPointerEvents(e)) {
 					const evPt = clientToNorm(ev.clientX, ev.clientY, ev.pointerType || e.pointerType)
@@ -606,6 +672,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		releaseCapturedPointer(e.pointerId)
 
 		if (state.kind === 'stylus-erase') {
+			if (isStylusQuickDrawOnly()) {
+				lastQuickDrawPenAt = Date.now()
+			}
 			return
 		}
 
@@ -672,26 +741,37 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (state.kind === 'draw') {
-			if (opts.activeTool.value === 'handwriting') {
+			const tool = effectiveTool()
+			if (tool === 'handwriting') {
 				activeHandwritingStroke.value = []
 				handwriting.endStroke(state.points)
 				return
 			}
 
-			if (opts.activeTool.value === 'text') {
+			if (tool === 'text') {
 				openCreateText(state.startNorm, pt, Boolean(state.moved))
 				return
 			}
 
-			if (opts.activeTool.value === 'link') {
+			if (tool === 'link') {
 				openCreateLink(state.startNorm, pt, Boolean(state.moved))
 				return
 			}
 
+			if (isStylusQuickDrawOnly()) {
+				lastQuickDrawPenAt = Date.now()
+			}
 			const draft = buildDraftFromTool(state.startNorm, pt, state.points)
 			if (draft) {
 				opts.onCreate(draft)
 			}
+		}
+	}
+
+	function onOverlayClick(e: MouseEvent) {
+		if (lastQuickDrawPenAt > 0 && Date.now() - lastQuickDrawPenAt < 350) {
+			e.stopPropagation()
+			e.preventDefault()
 		}
 	}
 
@@ -728,6 +808,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		onPointerMove,
 		onPointerUp,
 		onPointerCancel,
+		onOverlayClick,
 		onAnnotationDblClick,
 		commitPendingText,
 		cancelPendingText,

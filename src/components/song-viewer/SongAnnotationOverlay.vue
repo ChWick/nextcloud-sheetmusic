@@ -32,6 +32,8 @@ const props = withDefaults(
 		pageHeight?: number
 		totalPages?: number
 		editable?: boolean
+		/** Allow immediate stylus-only drawing (and hardware eraser) without enabling full edit mode. */
+		stylusQuickDraw?: boolean
 		activeTool?: EditorTool
 		toolStyle?: EditorToolStyle
 		selectedUuid?: string | null
@@ -49,6 +51,7 @@ const props = withDefaults(
 		pageHeight: 842,
 		totalPages: 1,
 		editable: false,
+		stylusQuickDraw: false,
 		activeTool: 'select',
 		toolStyle: createDefaultToolStyle,
 		selectedUuid: null,
@@ -152,6 +155,7 @@ const {
 	onPointerMove,
 	onPointerUp,
 	onPointerCancel,
+	onOverlayClick,
 	onAnnotationDblClick,
 	commitPendingText,
 	cancelPendingText,
@@ -165,6 +169,7 @@ const {
 	pageNumber: computed(() => props.pageNumber),
 	totalPages: computed(() => props.totalPages),
 	editable: computed(() => props.editable),
+	stylusQuickDraw: computed(() => props.stylusQuickDraw),
 	activeTool: computed(() => props.activeTool),
 	toolStyle: computed(() => props.toolStyle),
 	activeAnnotations,
@@ -179,6 +184,11 @@ const {
 })
 
 const displayedAnnotations = computed(() => {
+	if (!props.visible && !props.editable) {
+		return previewAnnotation.value && previewAnnotation.value.uuid === '__draft__'
+			? [previewAnnotation.value]
+			: []
+	}
 	const multiMap = previewAnnotations.value
 	const list = activeAnnotations.value.map((ann) => {
 		const multiPreview = multiMap.get(ann.uuid)
@@ -287,12 +297,12 @@ function handleOpenLinkPicker() {
 
 <template>
 	<div
-		v-if="(visible && (displayedAnnotations.length > 0 || editable)) || (linkBeacon && linkBeacon.pageNumber === pageNumber) || pickingLinkTarget || Boolean(selectedLinkTarget)"
+		v-if="(visible && (displayedAnnotations.length > 0 || editable)) || stylusQuickDraw || (linkBeacon && linkBeacon.pageNumber === pageNumber) || pickingLinkTarget || Boolean(selectedLinkTarget)"
 		class="sheetmusic-annotation-layer">
 		<svg
 			ref="svgRef"
 			class="sheetmusic-annotation-overlay"
-			:class="[{ 'is-editable': editable || pickingLinkTarget, 'is-stylus-only': editable && !pickingLinkTarget && isTouchDrawingBlocked }, cursorClass]"
+			:class="[{ 'is-editable': editable || pickingLinkTarget, 'is-stylus-quick-draw': stylusQuickDraw && !editable && !pickingLinkTarget, 'is-stylus-only': editable && !pickingLinkTarget && isTouchDrawingBlocked }, cursorClass]"
 			data-test="annotation-overlay"
 			:viewBox="`0 0 ${VIEWBOX_WIDTH} ${vbHeight}`"
 			preserveAspectRatio="xMidYMid meet"
@@ -300,6 +310,7 @@ function handleOpenLinkPicker() {
 			@pointermove="onPointerMove"
 			@pointerup="onPointerUp"
 			@pointercancel="onPointerCancel"
+			@click="onOverlayClick"
 			@pointerleave="hoveredUuid = null">
 			<SongAnnotationItem
 				v-for="item in displayedAnnotations"
@@ -445,6 +456,11 @@ function handleOpenLinkPicker() {
 .sheetmusic-annotation-overlay.is-editable {
 	pointer-events: auto;
 	touch-action: none;
+}
+
+.sheetmusic-annotation-overlay.is-stylus-quick-draw {
+	pointer-events: auto;
+	touch-action: pan-x pan-y pinch-zoom;
 }
 
 .cursor-crosshair {
