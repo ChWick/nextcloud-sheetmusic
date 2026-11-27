@@ -74,6 +74,7 @@ const props = withDefaults(
 		annotations?: SheetAnnotation[]
 		showAnnotations?: boolean
 		editableAnnotations?: boolean
+		stylusQuickDraw?: boolean
 		activeAnnotationTool?: EditorTool
 		annotationToolStyle?: EditorToolStyle
 		selectedAnnotationUuid?: string | null
@@ -111,6 +112,7 @@ const props = withDefaults(
 		annotations: () => [],
 		showAnnotations: true,
 		editableAnnotations: false,
+		stylusQuickDraw: false,
 		activeAnnotationTool: 'select',
 		annotationToolStyle: undefined,
 		selectedAnnotationUuid: null,
@@ -226,6 +228,7 @@ const {
 	annotations: computed(() => props.annotations),
 	showAnnotations: computed(() => props.showAnnotations),
 	editableAnnotations: computed(() => props.editableAnnotations),
+	stylusQuickDraw: computed(() => props.stylusQuickDraw),
 	activeAnnotationTool: computed(() => props.activeAnnotationTool),
 	annotationToolStyle: computed(() => props.annotationToolStyle),
 	selectedAnnotationUuid: computed(() => props.selectedAnnotationUuid),

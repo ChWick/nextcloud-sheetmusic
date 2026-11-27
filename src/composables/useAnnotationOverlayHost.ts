@@ -19,6 +19,7 @@ export interface UseAnnotationOverlayHostOptions {
 	annotations: ComputedRef<SheetAnnotation[]>
 	showAnnotations: ComputedRef<boolean | undefined>
 	editableAnnotations: ComputedRef<boolean>
+	stylusQuickDraw?: ComputedRef<boolean>
 	activeAnnotationTool: ComputedRef<EditorTool>
 	annotationToolStyle: ComputedRef<EditorToolStyle | undefined>
 	selectedAnnotationUuid: ComputedRef<string | null>
@@ -110,6 +111,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			pageHeight,
 			totalPages: opts.totalPages.value,
 			editable: opts.editableAnnotations.value,
+			stylusQuickDraw: opts.stylusQuickDraw?.value ?? false,
 			activeTool: opts.activeAnnotationTool.value,
 			toolStyle: opts.annotationToolStyle.value,
 			selectedUuid: opts.selectedAnnotationUuid.value,
@@ -163,6 +165,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			opts.annotations.value,
 			showAnnotationsState.value,
 			opts.editableAnnotations.value,
+			opts.stylusQuickDraw?.value,
 			opts.activeAnnotationTool.value,
 			opts.annotationToolStyle.value,
 			opts.selectedAnnotationUuid.value,
