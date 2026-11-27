@@ -11,6 +11,7 @@ import {
 	applyHeightMove,
 	applyResizeMove,
 	buildAnnotationDraft,
+	cloneAnnotation,
 	roundNorm,
 } from '../../../src/utils/annotationTransform'
 
@@ -35,6 +36,27 @@ describe('annotationTransform', () => {
 	it('rounds normalized coordinates to 4 decimal places', () => {
 		expect(roundNorm(0.123456)).toBe(0.1235)
 		expect(roundNorm(0.5)).toBe(0.5)
+	})
+
+	it('clones annotations deeply without mutating original style, data, or points', () => {
+		const original: SheetAnnotation = {
+			uuid: 'a1',
+			songId: 1,
+			fileId: 2,
+			pageNumber: 0,
+			type: 'drawing',
+			x: 0.1,
+			y: 0.2,
+			width: 0.3,
+			height: 0.4,
+			style: { stroke: '#000000', strokeWidth: 3 },
+			data: { points: [{ x: 0.1, y: 0.2, p: 0.5 }] },
+		}
+		const copy = cloneAnnotation(original)
+		copy.style.stroke = '#ff0000'
+		copy.data.points![0].x = 0.9
+		expect(original.style.stroke).toBe('#000000')
+		expect(original.data.points![0].x).toBe(0.1)
 	})
 
 	it('resizes box annotations without inverting bounds', () => {

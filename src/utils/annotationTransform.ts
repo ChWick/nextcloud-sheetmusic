@@ -13,6 +13,24 @@ export function roundNorm(val: number): number {
 	return Math.round(val * 10000) / 10000
 }
 
+/**
+ * Fast, structural clone of a SheetAnnotation (avoids JSON.parse/stringify on hot pointermove paths).
+ */
+export function cloneAnnotation(ann: SheetAnnotation): SheetAnnotation {
+	return {
+		...ann,
+		style: ann.style ? { ...ann.style } : {},
+		data: ann.data
+			? {
+				...ann.data,
+				...(Array.isArray(ann.data.points)
+					? { points: ann.data.points.map((p) => ({ ...p })) }
+					: {}),
+			}
+			: {},
+	}
+}
+
 export function applyResizeMove(
 	b: SheetAnnotation,
 	handle: string,
@@ -28,7 +46,7 @@ export function applyResizeMove(
 	if (handle.includes('n')) y1 = Math.min(y2 - 0.01, pt.y)
 	if (handle.includes('s')) y2 = Math.max(y1 + 0.01, pt.y)
 
-	const next: SheetAnnotation = JSON.parse(JSON.stringify(b))
+	const next = cloneAnnotation(b)
 	next.x = roundNorm(x1)
 	next.y = roundNorm(y1)
 	next.width = roundNorm(x2 - x1)
@@ -44,7 +62,7 @@ export function applyEndpointMove(
 	handle: string,
 	pt: NormalizedPoint,
 ): SheetAnnotation | null {
-	const next: SheetAnnotation = JSON.parse(JSON.stringify(b))
+	const next = cloneAnnotation(b)
 	const pts = next.data.points ?? []
 	const idx = handle === 'p0' ? 0 : 1
 	if (!pts[idx]) return null
@@ -62,7 +80,7 @@ export function applyHeightMove(
 	pt: NormalizedPoint,
 	vbHeight: number,
 ): SheetAnnotation | null {
-	const next: SheetAnnotation = JSON.parse(JSON.stringify(b))
+	const next = cloneAnnotation(b)
 	const pts = next.data.points ?? []
 	if (pts.length < 2) return null
 

@@ -9,7 +9,7 @@ import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import { getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { createUuid } from './useAnnotationEditor'
 import { computeBoundingBoxFromPoints, VIEWBOX_WIDTH } from '../utils/annotation'
-import { roundNorm } from '../utils/annotationTransform'
+import { cloneAnnotation, roundNorm } from '../utils/annotationTransform'
 import { learnHandwritingSample } from '../utils/handwritingModel'
 import {
 	recognizeHandwriting,
@@ -262,14 +262,9 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 				activeSymbol: resolvedSymbol,
 			}
 		} else if (resolvedSymbol !== current.activeSymbol) {
-			const next: SheetAnnotation = {
-				...JSON.parse(JSON.stringify(ann)),
-				data: {
-					...ann.data,
-					symbol: resolvedSymbol,
-					category: def?.category,
-				},
-			}
+			const next = cloneAnnotation(ann)
+			next.data.symbol = resolvedSymbol
+			next.data.category = def?.category
 			opts.onUpdate(ann, next)
 			swapState.value = {
 				...current,

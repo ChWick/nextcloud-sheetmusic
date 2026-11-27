@@ -18,6 +18,7 @@ import type {
 	TextAlign,
 } from '../types/annotation'
 import { translateAnnotation } from '../utils/annotation'
+import { cloneAnnotation } from '../utils/annotationTransform'
 import { handleAnnotationEditorKeydown } from '../utils/annotationShortcuts'
 import { hydrateHandwritingModelFromServer } from '../utils/handwritingModel'
 import {
@@ -209,7 +210,7 @@ export function useAnnotationEditor(
 	}
 
 	function cloneAnn(ann: SheetAnnotation): SheetAnnotation {
-		return JSON.parse(JSON.stringify(ann)) as SheetAnnotation
+		return cloneAnnotation(ann)
 	}
 
 	function toRestorableCopy(ann: SheetAnnotation): SheetAnnotation {

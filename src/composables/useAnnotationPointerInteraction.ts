@@ -19,6 +19,7 @@ import {
 	applyHeightMove,
 	applyResizeMove,
 	buildAnnotationDraft,
+	cloneAnnotation,
 	roundNorm,
 } from '../utils/annotationTransform'
 import {
@@ -168,10 +169,6 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (interaction.value?.pointerType === 'touch') {
 			cancelInteraction()
 		}
-	}
-
-	function cloneAnnotation(ann: SheetAnnotation): SheetAnnotation {
-		return JSON.parse(JSON.stringify(ann))
 	}
 
 	function setDraftPreview(draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> | null) {
