@@ -74,7 +74,6 @@ const toggleLabel = computed(() => {
 			<div :class="$style.splitGroup">
 				<NcButton
 					:variant="isActive || isPaused ? 'primary' : 'secondary'"
-					size="small"
 					:class="$style.mainBtn"
 					:aria-pressed="isActive"
 					:aria-label="toggleLabel"
@@ -82,8 +81,8 @@ const toggleLabel = computed(() => {
 					data-test="performance-autoscroll-toggle"
 					@click="emit('toggle')">
 					<template #icon>
-						<PauseIcon v-if="isActive" :size="18" />
-						<PlayIcon v-else :size="18" />
+						<PauseIcon v-if="isActive" :size="20" />
+						<PlayIcon v-else :size="20" />
 					</template>
 					<template v-if="countdownRemaining > 0">
 						{{ countdownRemaining }}s
@@ -94,7 +93,6 @@ const toggleLabel = computed(() => {
 				</NcButton>
 				<NcButton
 					:variant="isOpen || isActive || isPaused ? 'primary' : 'secondary'"
-					size="small"
 					:class="$style.arrowBtn"
 					:aria-expanded="isOpen"
 					:aria-label="t('sheetmusic', 'Auto-scroll options')"
@@ -102,7 +100,7 @@ const toggleLabel = computed(() => {
 					data-test="performance-autoscroll-menu"
 					@click="toggle">
 					<template #icon>
-						<ChevronDownIcon :size="16" />
+						<ChevronDownIcon :size="18" />
 					</template>
 				</NcButton>
 			</div>

@@ -108,7 +108,6 @@ const emit = defineEmits<{
 			<NcButton
 				v-if="showSetlistControls"
 				variant="secondary"
-				size="small"
 				:disabled="!hasPrevSong"
 				:title="t('sheetmusic', 'Previous song')"
 				:aria-label="t('sheetmusic', 'Previous song')"
@@ -117,7 +116,6 @@ const emit = defineEmits<{
 			</NcButton>
 			<NcButton
 				variant="secondary"
-				size="small"
 				:disabled="!hasPrevSong && !canGoPrevPage"
 				:title="t('sheetmusic', 'Previous page')"
 				:aria-label="t('sheetmusic', 'Previous page')"
@@ -129,7 +127,6 @@ const emit = defineEmits<{
 			</span>
 			<NcButton
 				variant="secondary"
-				size="small"
 				:disabled="!hasNextSong && !canGoNextPage"
 				:title="t('sheetmusic', 'Next page')"
 				:aria-label="t('sheetmusic', 'Next page')"
@@ -139,7 +136,6 @@ const emit = defineEmits<{
 			<NcButton
 				v-if="showSetlistControls"
 				variant="secondary"
-				size="small"
 				:disabled="!hasNextSong"
 				:title="t('sheetmusic', 'Next song')"
 				:aria-label="t('sheetmusic', 'Next song')"
@@ -149,22 +145,20 @@ const emit = defineEmits<{
 			<NcButton
 				v-if="totalPages > 1 || hasPrevSong || hasNextSong"
 				:variant="isPagePickerOpen ? 'primary' : 'secondary'"
-				size="small"
 				:aria-pressed="isPagePickerOpen"
 				:aria-label="t('sheetmusic', 'Jump to page')"
 				:title="t('sheetmusic', 'Jump to page')"
 				@click="emit('togglePagePicker')">
-				<template #icon><ViewGridOutlineIcon :size="18" /></template>
+				<template #icon><ViewGridOutlineIcon :size="20" /></template>
 			</NcButton>
 			<NcButton
 				v-if="showSetlistControls"
 				:variant="isDrawerOpen ? 'primary' : 'secondary'"
-				size="small"
 				:aria-pressed="isDrawerOpen"
 				:aria-label="t('sheetmusic', 'Setlist items')"
 				:title="t('sheetmusic', 'Setlist items')"
 				@click="emit('toggleDrawer')">
-				<template #icon><FormatListBulletedIcon :size="18" /></template>
+				<template #icon><FormatListBulletedIcon :size="20" /></template>
 			</NcButton>
 		</div>
 
@@ -196,23 +190,21 @@ const emit = defineEmits<{
 			<NcButton
 				v-if="showSetlistControls && (layoutChoice === 'auto' || effectiveLayout === 'double')"
 				:variant="interleaveSongs ? 'primary' : 'secondary'"
-				size="small"
 				:aria-pressed="interleaveSongs"
 				:aria-label="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
 				:title="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
 				@click="emit('toggleInterleave')">
-				<template #icon><CompareHorizontalIcon :size="18" /></template>
+				<template #icon><CompareHorizontalIcon :size="20" /></template>
 			</NcButton>
 
 			<NcButton
 				:variant="tightCrop ? 'primary' : 'secondary'"
-				size="small"
 				:aria-pressed="tightCrop"
 				:aria-label="t('sheetmusic', 'Tight on-the-fly crop')"
 				:title="t('sheetmusic', 'Tight on-the-fly crop')"
 				data-test="performance-bottom-crop-toggle"
 				@click="emit('toggleTightCrop')">
-				<template #icon><CropIcon :size="18" /></template>
+				<template #icon><CropIcon :size="20" /></template>
 			</NcButton>
 
 			<PerformanceAutoScrollControl
@@ -233,7 +225,6 @@ const emit = defineEmits<{
 				@update:open="emit('update:autoScrollPopoverOpen', $event)" />
 
 			<NightModeSplitButton
-				size="small"
 				:open="isAppearancePopoverOpen"
 				:score-color-mode="scoreColorMode"
 				:score-brightness="scoreBrightness"
@@ -247,13 +238,12 @@ const emit = defineEmits<{
 
 			<NcButton
 				variant="secondary"
-				size="small"
 				:aria-label="zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page') : t('sheetmusic', 'Fit Width')"
 				:title="zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page (click for Fit Width)') : t('sheetmusic', 'Fit Width (click for Fit Page)')"
 				@click="emit('toggleZoom')">
 				<template #icon>
-					<FitToPageOutlineIcon v-if="zoomChoice === 'fit-page'" :size="18" />
-					<ArrowExpandHorizontalIcon v-else :size="18" />
+					<FitToPageOutlineIcon v-if="zoomChoice === 'fit-page'" :size="20" />
+					<ArrowExpandHorizontalIcon v-else :size="20" />
 				</template>
 			</NcButton>
 		</div>
