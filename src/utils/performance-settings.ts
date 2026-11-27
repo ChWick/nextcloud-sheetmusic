@@ -9,6 +9,11 @@ export const SCORE_BRIGHTNESS_MIN = 40
 export const SCORE_BRIGHTNESS_MAX = 100
 export const SCORE_SEPIA_MIN = 0
 export const SCORE_SEPIA_MAX = 100
+export const AUTO_SCROLL_SPEED_MIN = 5
+export const AUTO_SCROLL_SPEED_MAX = 200
+export const AUTO_SCROLL_SPEED_DEFAULT = 35
+export const AUTO_SCROLL_DELAY_MIN = 0
+export const AUTO_SCROLL_DELAY_MAX = 30
 
 export interface PerformanceViewerSettings {
 	layoutChoice: PerformanceLayoutChoice
@@ -26,6 +31,10 @@ export interface PerformanceViewerSettings {
 	scoreBrightness: number
 	/** Continuous sepia tint percentage (0..100) */
 	scoreSepia: number
+	/** Preferred auto-scroll speed in px/second (5..200) */
+	autoScrollSpeed: number
+	/** Preferred auto-scroll start delay in seconds (0..30) */
+	autoScrollDelay: number
 }
 
 export interface SetlistPerformanceOverride extends PerformanceViewerSettings {
@@ -72,6 +81,8 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	scoreColorMode: 'normal',
 	scoreBrightness: SCORE_BRIGHTNESS_MAX,
 	scoreSepia: 0,
+	autoScrollSpeed: AUTO_SCROLL_SPEED_DEFAULT,
+	autoScrollDelay: 0,
 }
 
 const VALID_LAYOUTS = new Set<PerformanceLayoutChoice>(['auto', 'single', 'double', 'continuous'])
@@ -93,6 +104,20 @@ export function sanitizeScoreSepia(raw: unknown): number {
 		return SCORE_SEPIA_MIN
 	}
 	return Math.min(SCORE_SEPIA_MAX, Math.max(SCORE_SEPIA_MIN, Math.round(raw)))
+}
+
+export function sanitizeAutoScrollSpeed(raw: unknown): number {
+	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+		return AUTO_SCROLL_SPEED_DEFAULT
+	}
+	return Math.min(AUTO_SCROLL_SPEED_MAX, Math.max(AUTO_SCROLL_SPEED_MIN, Math.round(raw)))
+}
+
+export function sanitizeAutoScrollDelay(raw: unknown): number {
+	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+		return AUTO_SCROLL_DELAY_MIN
+	}
+	return Math.min(AUTO_SCROLL_DELAY_MAX, Math.max(AUTO_SCROLL_DELAY_MIN, Math.round(raw)))
 }
 
 export function getDefaultSepiaForMode(mode: ScoreColorMode): number {
@@ -252,6 +277,8 @@ export function validatePerformanceSettings(raw: unknown): PerformanceViewerSett
 					? (obj.scoreColorMode as ScoreColorMode)
 					: DEFAULT_PERFORMANCE_SETTINGS.scoreColorMode,
 			),
+		autoScrollSpeed: sanitizeAutoScrollSpeed(obj.autoScrollSpeed),
+		autoScrollDelay: sanitizeAutoScrollDelay(obj.autoScrollDelay),
 	}
 }
 
@@ -309,6 +336,8 @@ export function loadEffectivePerformanceSettings(
 					scoreColorMode: setlistOverride.scoreColorMode,
 					scoreBrightness: setlistOverride.scoreBrightness,
 					scoreSepia: setlistOverride.scoreSepia,
+					autoScrollSpeed: setlistOverride.autoScrollSpeed,
+					autoScrollDelay: setlistOverride.autoScrollDelay,
 				},
 				overrideEnabled: true,
 			}

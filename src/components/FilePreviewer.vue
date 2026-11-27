@@ -957,6 +957,10 @@ function canPanHorizontally(): boolean {
 	return Boolean(el && el.scrollWidth > el.clientWidth + 2)
 }
 
+function getScrollContainer(): HTMLElement | null {
+	return pdfContainer.value
+}
+
 defineExpose({
 	openInExternalViewer,
 	goToPage,
@@ -970,6 +974,7 @@ defineExpose({
 	wasRecentlyPinching,
 	wasRecentlyDragging,
 	canPanHorizontally,
+	getScrollContainer,
 	currentPage,
 	totalPages,
 	currentPageDisplay,

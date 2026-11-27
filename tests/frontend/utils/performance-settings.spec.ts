@@ -38,6 +38,8 @@ describe('performance-settings', () => {
 			scoreColorMode: 'night',
 			scoreBrightness: 80,
 			scoreSepia: 0,
+			autoScrollSpeed: 50,
+			autoScrollDelay: 3,
 		})
 
 		const setlistStore = createSetlistPerformanceStore(10, 5, storage)
@@ -52,6 +54,8 @@ describe('performance-settings', () => {
 			scoreColorMode: 'sepia',
 			scoreBrightness: 90,
 			scoreSepia: 45,
+			autoScrollSpeed: 25,
+			autoScrollDelay: 5,
 			overrideEnabled: false,
 		})
 
@@ -68,6 +72,8 @@ describe('performance-settings', () => {
 				scoreColorMode: 'night',
 				scoreBrightness: 80,
 				scoreSepia: 0,
+				autoScrollSpeed: 50,
+				autoScrollDelay: 3,
 			},
 			overrideEnabled: false,
 		})
@@ -84,6 +90,8 @@ describe('performance-settings', () => {
 			scoreColorMode: 'sepia',
 			scoreBrightness: 90,
 			scoreSepia: 45,
+			autoScrollSpeed: 25,
+			autoScrollDelay: 5,
 			overrideEnabled: true,
 		})
 
@@ -99,6 +107,8 @@ describe('performance-settings', () => {
 				scoreColorMode: 'sepia',
 				scoreBrightness: 90,
 				scoreSepia: 45,
+				autoScrollSpeed: 25,
+				autoScrollDelay: 5,
 			},
 			overrideEnabled: true,
 		})
@@ -116,6 +126,8 @@ describe('performance-settings', () => {
 				scoreColorMode: 'night',
 				scoreBrightness: 80,
 				scoreSepia: 0,
+				autoScrollSpeed: 50,
+				autoScrollDelay: 3,
 			},
 			overrideEnabled: false,
 		})
