@@ -296,6 +296,37 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		)
 	}
 
+	function beginDrawStroke(e: PointerEvent, pt: NormalizedPoint, stopPropagation = false) {
+		e.preventDefault()
+		if (stopPropagation) {
+			e.stopPropagation()
+		}
+		capturePointer(e.pointerId)
+		const state: InteractionState = {
+			kind: 'draw',
+			pointerId: e.pointerId,
+			startNorm: pt,
+			currentNorm: pt,
+			points: [],
+			moved: false,
+			pointerType: e.pointerType,
+			pressureTracker: createStrokePressureTracker(e.pointerType),
+		}
+		const initialPressure = sampleStrokePressure(e, state)
+		const startPoint: NormalizedPoint = initialPressure !== undefined ? { ...pt, p: initialPressure } : pt
+		state.startNorm = startPoint
+		state.currentNorm = startPoint
+		state.points.push(startPoint)
+		interaction.value = state
+
+		if (effectiveTool() === 'handwriting') {
+			handwriting.beginStroke(startPoint)
+			activeHandwritingStroke.value = [startPoint]
+		} else {
+			setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
+		}
+	}
+
 	function onPointerDown(e: PointerEvent) {
 		const quickDrawOnly = isStylusQuickDrawOnly()
 		if ((!opts.editable.value && !quickDrawOnly) || e.ctrlKey || e.metaKey) return
@@ -355,26 +386,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (quickDrawOnly) {
-			e.preventDefault()
-			e.stopPropagation()
-			capturePointer(e.pointerId)
-			const state: InteractionState = {
-				kind: 'draw',
-				pointerId: e.pointerId,
-				startNorm: pt,
-				currentNorm: pt,
-				points: [],
-				moved: false,
-				pointerType: e.pointerType,
-				pressureTracker: createStrokePressureTracker(e.pointerType),
-			}
-			const initialPressure = sampleStrokePressure(e, state)
-			const startPoint: NormalizedPoint = initialPressure !== undefined ? { ...pt, p: initialPressure } : pt
-			state.startNorm = startPoint
-			state.currentNorm = startPoint
-			state.points.push(startPoint)
-			interaction.value = state
-			setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
+			beginDrawStroke(e, pt, true)
 			return
 		}
 
@@ -530,31 +542,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			emitSelection([])
 		}
 
-		e.preventDefault()
-		capturePointer(e.pointerId)
-		const state: InteractionState = {
-			kind: 'draw',
-			pointerId: e.pointerId,
-			startNorm: pt,
-			currentNorm: pt,
-			points: [],
-			moved: false,
-			pointerType: e.pointerType,
-			pressureTracker: createStrokePressureTracker(e.pointerType),
-		}
-		const initialPressure = sampleStrokePressure(e, state)
-		const startPoint: NormalizedPoint = initialPressure !== undefined ? { ...pt, p: initialPressure } : pt
-		state.startNorm = startPoint
-		state.currentNorm = startPoint
-		state.points.push(startPoint)
-		interaction.value = state
-
-		if (opts.activeTool.value === 'handwriting') {
-			handwriting.beginStroke(startPoint)
-			activeHandwritingStroke.value = [startPoint]
-		} else {
-			setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
-		}
+		beginDrawStroke(e, pt)
 	}
 
 	function onPointerMove(e: PointerEvent) {
