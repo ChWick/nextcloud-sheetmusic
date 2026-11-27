@@ -92,32 +92,27 @@ const VALID_SCORE_COLOR_MODES = new Set<ScoreColorMode>(['normal', 'sepia', 'nig
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i
 const HEX_SHORT_RE = /^#[0-9a-f]{3}$/i
 
-export function sanitizeScoreBrightness(raw: unknown): number {
+function clampInt(raw: unknown, min: number, max: number, fallback: number): number {
 	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-		return SCORE_BRIGHTNESS_MAX
+		return fallback
 	}
-	return Math.min(SCORE_BRIGHTNESS_MAX, Math.max(SCORE_BRIGHTNESS_MIN, Math.round(raw)))
+	return Math.min(max, Math.max(min, Math.round(raw)))
+}
+
+export function sanitizeScoreBrightness(raw: unknown): number {
+	return clampInt(raw, SCORE_BRIGHTNESS_MIN, SCORE_BRIGHTNESS_MAX, SCORE_BRIGHTNESS_MAX)
 }
 
 export function sanitizeScoreSepia(raw: unknown): number {
-	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-		return SCORE_SEPIA_MIN
-	}
-	return Math.min(SCORE_SEPIA_MAX, Math.max(SCORE_SEPIA_MIN, Math.round(raw)))
+	return clampInt(raw, SCORE_SEPIA_MIN, SCORE_SEPIA_MAX, SCORE_SEPIA_MIN)
 }
 
 export function sanitizeAutoScrollSpeed(raw: unknown): number {
-	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-		return AUTO_SCROLL_SPEED_DEFAULT
-	}
-	return Math.min(AUTO_SCROLL_SPEED_MAX, Math.max(AUTO_SCROLL_SPEED_MIN, Math.round(raw)))
+	return clampInt(raw, AUTO_SCROLL_SPEED_MIN, AUTO_SCROLL_SPEED_MAX, AUTO_SCROLL_SPEED_DEFAULT)
 }
 
 export function sanitizeAutoScrollDelay(raw: unknown): number {
-	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-		return AUTO_SCROLL_DELAY_MIN
-	}
-	return Math.min(AUTO_SCROLL_DELAY_MAX, Math.max(AUTO_SCROLL_DELAY_MIN, Math.round(raw)))
+	return clampInt(raw, AUTO_SCROLL_DELAY_MIN, AUTO_SCROLL_DELAY_MAX, AUTO_SCROLL_DELAY_MIN)
 }
 
 export function getDefaultSepiaForMode(mode: ScoreColorMode): number {
@@ -324,21 +319,9 @@ export function loadEffectivePerformanceSettings(
 	if (setlistId !== undefined && setlistId > 0) {
 		const setlistOverride = createSetlistPerformanceStore(libraryId, setlistId, storage).get()
 		if (setlistOverride.overrideEnabled) {
+			const { overrideEnabled: _ignored, ...settings } = setlistOverride
 			return {
-				settings: {
-					layoutChoice: setlistOverride.layoutChoice,
-					doublePageTurnMode: setlistOverride.doublePageTurnMode,
-					zoomChoice: setlistOverride.zoomChoice,
-					showAnnotations: setlistOverride.showAnnotations,
-					interleaveSongs: setlistOverride.interleaveSongs,
-					backgroundColor: setlistOverride.backgroundColor,
-					tightCrop: setlistOverride.tightCrop,
-					scoreColorMode: setlistOverride.scoreColorMode,
-					scoreBrightness: setlistOverride.scoreBrightness,
-					scoreSepia: setlistOverride.scoreSepia,
-					autoScrollSpeed: setlistOverride.autoScrollSpeed,
-					autoScrollDelay: setlistOverride.autoScrollDelay,
-				},
+				settings,
 				overrideEnabled: true,
 			}
 		}
