@@ -33,6 +33,7 @@ withDefaults(defineProps<{
 	scoreColorMode?: ScoreColorMode
 	scoreBrightness?: number
 	scoreSepia?: number
+	isAppearancePopoverOpen?: boolean
 	isPagePickerOpen?: boolean
 	isDrawerOpen?: boolean
 	showSetlistControls?: boolean
@@ -42,6 +43,7 @@ withDefaults(defineProps<{
 	scoreColorMode: 'normal',
 	scoreBrightness: 100,
 	scoreSepia: 0,
+	isAppearancePopoverOpen: undefined,
 	isPagePickerOpen: false,
 	isDrawerOpen: false,
 	showSetlistControls: true,
@@ -190,6 +192,7 @@ const emit = defineEmits<{
 
 			<NightModeSplitButton
 				size="small"
+				:open="isAppearancePopoverOpen"
 				:score-color-mode="scoreColorMode"
 				:score-brightness="scoreBrightness"
 				:score-sepia="scoreSepia"

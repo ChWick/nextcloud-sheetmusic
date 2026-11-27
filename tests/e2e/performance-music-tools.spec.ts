@@ -117,8 +117,12 @@ test.describe('Performance Mode Metronome & Pitch Pipe', () => {
 		await expect(appearancePopover.locator('[data-test="popover-score-sepia-value"]')).toHaveText('60%')
 		await expect(pdfContainer).toHaveAttribute('data-score-sepia', '60')
 
-		// Close popover and exit -> regular Song Viewer reflects persisted night appearance and exposes split menu too
-		await appearancePopover.getByRole('button', { name: 'Close' }).click()
+		// Pressing Escape closes the appearance popover without exiting performance mode
+		await page.keyboard.press('Escape')
+		await expect(appearancePopover).toBeHidden()
+		await expect(dialog.locator('[data-test="stop-performance-button"]')).toBeVisible()
+
+		// Exit -> regular Song Viewer reflects persisted night appearance and exposes split menu too
 		await dialog.locator('[data-test="stop-performance-button"]').click()
 		const viewerNightBtn = page.locator('[data-test="viewer-night-mode-button"]')
 		await expect(viewerNightBtn).toHaveAttribute('aria-pressed', 'true')

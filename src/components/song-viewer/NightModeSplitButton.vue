@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
@@ -17,12 +17,14 @@ const props = withDefaults(defineProps<{
 	scoreColorMode?: ScoreColorMode
 	scoreBrightness?: number
 	scoreSepia?: number
+	open?: boolean
 	size?: 'small' | 'normal'
 	toggleTestId?: string
 }>(), {
 	scoreColorMode: 'normal',
 	scoreBrightness: SCORE_BRIGHTNESS_MAX,
 	scoreSepia: SCORE_SEPIA_MIN,
+	open: undefined,
 	size: 'normal',
 	toggleTestId: 'night-mode-toggle',
 })
@@ -35,7 +37,14 @@ const emit = defineEmits<{
 	'update:open': [open: boolean]
 }>()
 
-const isOpen = ref(false)
+const internalOpen = ref(false)
+const isOpen = computed({
+	get: () => (props.open !== undefined ? props.open : internalOpen.value),
+	set: (val: boolean) => {
+		internalOpen.value = val
+		emit('update:open', val)
+	},
+})
 const isActive = computed(() =>
 	isNightScoreMode(props.scoreColorMode)
 	|| props.scoreSepia > 0
@@ -71,10 +80,6 @@ function onToggleClick() {
 	}
 	emit('toggle-night-mode')
 }
-
-watch(isOpen, (open) => {
-	emit('update:open', open)
-})
 
 onUnmounted(() => {
 	clearLongPress()

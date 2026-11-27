@@ -16,6 +16,7 @@ import { useHudAutoHide } from '../../composables/useHudAutoHide'
 import { useMetronome } from '../../composables/useMetronome'
 import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
 import { usePitchPipe } from '../../composables/usePitchPipe'
+import { useScoreAppearance } from '../../composables/useScoreAppearance'
 import { useWakeLock } from '../../composables/useWakeLock'
 import {
 	extractSongKeyPitchClass,
@@ -39,14 +40,11 @@ import type { DoublePageTurnMode } from '../../utils/page-turn'
 import {
 	createLibraryPerformanceStore,
 	createSetlistPerformanceStore,
-	getDefaultSepiaForMode,
 	getEffectiveStageBackground,
-	isNightScoreMode,
 	loadEffectivePerformanceSettings,
 	type PerformanceLayoutChoice,
 	type PerformanceViewerSettings,
 	type PerformanceZoomChoice,
-	type ScoreColorMode,
 } from '../../utils/performance-settings'
 
 const props = withDefaults(defineProps<{
@@ -96,10 +94,20 @@ const showAnnotations = ref(initialSettings.settings.showAnnotations)
 const interleaveSongs = ref(initialSettings.settings.interleaveSongs)
 const backgroundColor = ref(initialSettings.settings.backgroundColor)
 const tightCrop = ref(initialSettings.settings.tightCrop)
-const scoreColorMode = ref<ScoreColorMode>(initialSettings.settings.scoreColorMode)
-const scoreBrightness = ref(initialSettings.settings.scoreBrightness)
-const scoreSepia = ref(initialSettings.settings.scoreSepia)
-const isNightMode = computed(() => isNightScoreMode(scoreColorMode.value))
+const {
+	scoreColorMode,
+	scoreBrightness,
+	scoreSepia,
+	isNightMode,
+	apply: applyScoreAppearance,
+	setMode: onUpdateScoreColorMode,
+	toggleNight: onToggleNightMode,
+	setBrightness: onUpdateScoreBrightness,
+	setSepia: onUpdateScoreSepia,
+} = useScoreAppearance({
+	initial: initialSettings.settings,
+	onChange: () => persistCurrentSettings(),
+})
 const effectiveOverlayBackground = computed(() =>
 	getEffectiveStageBackground(backgroundColor.value, scoreColorMode.value, scoreSepia.value),
 )
@@ -175,9 +183,7 @@ function applySettingsToPreviewer(settings: PerformanceViewerSettings) {
 	interleaveSongs.value = settings.interleaveSongs
 	backgroundColor.value = settings.backgroundColor
 	tightCrop.value = settings.tightCrop
-	scoreColorMode.value = settings.scoreColorMode
-	scoreBrightness.value = settings.scoreBrightness
-	scoreSepia.value = settings.scoreSepia
+	applyScoreAppearance(settings)
 }
 
 function toggleSetlistOverride(enabled: boolean) {
@@ -453,31 +459,6 @@ function onUpdateTightCrop(enabled: boolean) {
 	persistCurrentSettings()
 }
 
-function onUpdateScoreColorMode(mode: ScoreColorMode) {
-	scoreColorMode.value = mode
-	scoreSepia.value = getDefaultSepiaForMode(mode)
-	persistCurrentSettings()
-}
-
-function onToggleNightMode() {
-	onUpdateScoreColorMode(isNightScoreMode(scoreColorMode.value) ? 'normal' : 'night')
-}
-
-function onUpdateScoreBrightness(brightness: number) {
-	scoreBrightness.value = brightness
-	persistCurrentSettings()
-}
-
-function onUpdateScoreSepia(sepia: number) {
-	scoreSepia.value = sepia
-	if (isNightScoreMode(scoreColorMode.value)) {
-		scoreColorMode.value = sepia > 0 ? 'night-sepia' : 'night'
-	} else {
-		scoreColorMode.value = sepia > 0 ? 'sepia' : 'normal'
-	}
-	persistCurrentSettings()
-}
-
 function onZoomToggle() {
 	const next = zoomChoice.value === 'fit-page' ? 'fit-width' : 'fit-page'
 	zoomChoice.value = next
@@ -541,6 +522,9 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 	onToggleHud: toggleHud,
 	onEscape: () => {
 		if (toolsButtonsRef.value?.closeOpenPopover()) {
+			scheduleHudAutoHide()
+		} else if (isAppearancePopoverOpen.value) {
+			isAppearancePopoverOpen.value = false
 			scheduleHudAutoHide()
 		} else if (isSettingsOpen.value) {
 			isSettingsOpen.value = false
@@ -733,6 +717,7 @@ onUnmounted(() => {
 				:score-color-mode="scoreColorMode"
 				:score-brightness="scoreBrightness"
 				:score-sepia="scoreSepia"
+				:is-appearance-popover-open="isAppearancePopoverOpen"
 				:is-page-picker-open="isPagePickerOpen"
 				:is-drawer-open="isDrawerOpen"
 				:show-setlist-controls="!isSingleSongMode"

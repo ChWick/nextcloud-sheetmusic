@@ -24,14 +24,9 @@ import FullscreenShell from './FullscreenShell.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
 import { useFullscreenBody } from '../composables/useFullscreenBody'
+import { useScoreAppearance } from '../composables/useScoreAppearance'
 import type { SheetAnnotation } from '../types/annotation'
-import {
-	createLibraryPerformanceStore,
-	DEFAULT_PERFORMANCE_SETTINGS,
-	getDefaultSepiaForMode,
-	isNightScoreMode,
-	type ScoreColorMode,
-} from '../utils/performance-settings'
+import { createLibraryPerformanceStore } from '../utils/performance-settings'
 
 const props = withDefaults(
 	defineProps<{
@@ -92,52 +87,26 @@ const isPerformanceMode = ref(false)
 const performanceStartPage = ref(1)
 const selectedFileId = ref('')
 const filePreviewerRef = ref<InstanceType<typeof FileViewerContent> | null>(null)
-const scoreColorMode = ref<ScoreColorMode>(DEFAULT_PERFORMANCE_SETTINGS.scoreColorMode)
-const scoreBrightness = ref<number>(DEFAULT_PERFORMANCE_SETTINGS.scoreBrightness)
-const scoreSepia = ref<number>(DEFAULT_PERFORMANCE_SETTINGS.scoreSepia)
+const {
+	scoreColorMode,
+	scoreBrightness,
+	scoreSepia,
+	apply: applyScoreAppearance,
+	setMode: updateViewerScoreColorMode,
+	toggleNight: toggleViewerNightMode,
+	setBrightness: updateViewerScoreBrightness,
+	setSepia: updateViewerScoreSepia,
+} = useScoreAppearance({
+	onChange: (state) => {
+		if (props.libraryId <= 0) return
+		const store = createLibraryPerformanceStore(props.libraryId)
+		store.save({ ...store.get(), ...state })
+	},
+})
 
 function loadScoreAppearance() {
 	if (props.libraryId <= 0) return
-	const s = createLibraryPerformanceStore(props.libraryId).get()
-	scoreColorMode.value = s.scoreColorMode
-	scoreBrightness.value = s.scoreBrightness
-	scoreSepia.value = s.scoreSepia
-}
-
-function persistViewerScoreAppearance() {
-	if (props.libraryId <= 0) return
-	const store = createLibraryPerformanceStore(props.libraryId)
-	store.save({
-		...store.get(),
-		scoreColorMode: scoreColorMode.value,
-		scoreBrightness: scoreBrightness.value,
-		scoreSepia: scoreSepia.value,
-	})
-}
-
-function updateViewerScoreColorMode(mode: ScoreColorMode) {
-	scoreColorMode.value = mode
-	scoreSepia.value = getDefaultSepiaForMode(mode)
-	persistViewerScoreAppearance()
-}
-
-function toggleViewerNightMode() {
-	updateViewerScoreColorMode(isNightScoreMode(scoreColorMode.value) ? 'normal' : 'night')
-}
-
-function updateViewerScoreBrightness(brightness: number) {
-	scoreBrightness.value = brightness
-	persistViewerScoreAppearance()
-}
-
-function updateViewerScoreSepia(sepia: number) {
-	scoreSepia.value = sepia
-	if (isNightScoreMode(scoreColorMode.value)) {
-		scoreColorMode.value = sepia > 0 ? 'night-sepia' : 'night'
-	} else {
-		scoreColorMode.value = sepia > 0 ? 'sepia' : 'normal'
-	}
-	persistViewerScoreAppearance()
+	applyScoreAppearance(createLibraryPerformanceStore(props.libraryId).get())
 }
 
 watch(() => props.libraryId, loadScoreAppearance, { immediate: true })

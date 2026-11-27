@@ -67,7 +67,8 @@ function close() {
 			ref="paneRef"
 			:class="[$style.popoverPane, paneClass]"
 			:style="popoverPositionStyle"
-			:data-test="paneTestId">
+			:data-test="paneTestId"
+			@keydown.esc.stop.prevent="close">
 			<div v-if="title" :class="$style.popoverHeader">
 				<strong>{{ title }}</strong>
 				<button
