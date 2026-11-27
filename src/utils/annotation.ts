@@ -17,6 +17,30 @@ export const VIEWBOX_WIDTH = 1000
 export const DEFAULT_VIEWBOX_HEIGHT = 1414.21 // A4 portrait aspect ratio (sqrt(2) * 1000)
 
 /**
+ * Resolve the effective CSS `mix-blend-mode` for an annotation.
+ * Highlighters always render behind notation: `multiply` on light scores
+ * (so black staves/notes remain crisp) and `screen` on inverted night scores
+ * (so light staves/notes remain crisp over dark backgrounds), even when the
+ * stored highlight style persisted `blendMode: 'multiply'`.
+ *
+ * @param item Annotation type and style
+ * @param nightMode Whether night score inversion mode is active
+ */
+export function resolveAnnotationBlendMode(
+	item: Pick<SheetAnnotation, 'type' | 'style'>,
+	nightMode = false,
+): string {
+	const explicit = item.style?.blendMode
+	if (item.type === 'highlight') {
+		if (!explicit || explicit === 'multiply' || explicit === 'screen') {
+			return nightMode ? 'screen' : 'multiply'
+		}
+		return explicit
+	}
+	return explicit || 'normal'
+}
+
+/**
  * Compute isotropic SVG viewBox height for a page given its width and height.
  * Keeping X and Y in 1:1 physical aspect ratio prevents stretching of circles,
  * stroke widths, arrowheads, hairpins, and music font glyphs.

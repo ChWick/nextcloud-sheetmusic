@@ -14,6 +14,70 @@ export function roundNorm(val: number): number {
 }
 
 /**
+ * Tools that support snap-to-axis straight-line drawing (via Shift or the Snap toggle).
+ *
+ * @param tool Active annotation editor tool
+ */
+export function isSnappableLineTool(tool: EditorTool): boolean {
+	return (
+		tool === 'drawing'
+		|| tool === 'highlight'
+		|| tool === 'line'
+		|| tool === 'arrow'
+		|| tool === 'crescendo'
+		|| tool === 'decrescendo'
+		|| tool === 'slur'
+		|| tool === 'bracket'
+		|| tool === 'bracket-up'
+	)
+}
+
+/**
+ * Snap `target` relative to `anchor` onto the nearest `stepDeg`-degree axis
+ * (default 45°: horizontal, vertical, and true visual diagonals) in isotropic
+ * SVG page coordinates (`VIEWBOX_WIDTH × vbHeight`), clamping along the snapped
+ * ray so the angle stays exact at page edges.
+ *
+ * @param anchor Fixed start/anchor point in normalized [0..1] coordinates
+ * @param target Raw pointer target point in normalized [0..1] coordinates
+ * @param vbHeight Isotropic SVG viewBox height for the page
+ * @param stepDeg Angle increment in degrees (default 45)
+ */
+export function snapPointToAxis(
+	anchor: NormalizedPoint,
+	target: NormalizedPoint,
+	vbHeight: number = VIEWBOX_WIDTH,
+	stepDeg = 45,
+): NormalizedPoint {
+	const safeH = vbHeight > 0 ? vbHeight : VIEWBOX_WIDTH
+	const ax = anchor.x * VIEWBOX_WIDTH
+	const ay = anchor.y * safeH
+	const dx = target.x * VIEWBOX_WIDTH - ax
+	const dy = target.y * safeH - ay
+	const len = Math.hypot(dx, dy)
+	if (len < 1e-6) {
+		return { x: roundNorm(anchor.x), y: roundNorm(anchor.y) }
+	}
+
+	const stepRad = (stepDeg * Math.PI) / 180
+	const snappedAngle = Math.round(Math.atan2(dy, dx) / stepRad) * stepRad
+	const cos = Math.cos(snappedAngle)
+	const sin = Math.sin(snappedAngle)
+
+	let maxLen = len
+	if (cos > 1e-6) maxLen = Math.min(maxLen, (VIEWBOX_WIDTH - ax) / cos)
+	else if (cos < -1e-6) maxLen = Math.min(maxLen, -ax / cos)
+	if (sin > 1e-6) maxLen = Math.min(maxLen, (safeH - ay) / sin)
+	else if (sin < -1e-6) maxLen = Math.min(maxLen, -ay / sin)
+	maxLen = Math.max(0, maxLen)
+
+	return {
+		x: roundNorm(Math.min(1, Math.max(0, (ax + cos * maxLen) / VIEWBOX_WIDTH))),
+		y: roundNorm(Math.min(1, Math.max(0, (ay + sin * maxLen) / safeH))),
+	}
+}
+
+/**
  * Fast, structural clone of a SheetAnnotation (avoids JSON.parse/stringify on hot pointermove paths).
  */
 export function cloneAnnotation(ann: SheetAnnotation): SheetAnnotation {

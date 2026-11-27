@@ -62,6 +62,7 @@ export interface EditorToolStyle {
 	shapeHeight: number
 	stampSymbol: string
 	stampSize: number
+	snapToAxis?: boolean
 }
 
 type HistoryAction =

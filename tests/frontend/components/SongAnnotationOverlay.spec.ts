@@ -1020,4 +1020,184 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(hl.attributes('fill')).toBe('#ffeb3b')
 		expect(hl.attributes('style')).toContain('mix-blend-mode: screen')
 	})
+
+	it('switches persisted multiply highlighters (path and pressure path) to screen in nightMode and keeps multiply in light mode', () => {
+		const annotations: SheetAnnotation[] = [
+			{
+				id: 93,
+				uuid: 'hl-path-saved',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				type: 'highlight',
+				x: 0.1,
+				y: 0.2,
+				width: 0.4,
+				height: 0.02,
+				style: { stroke: '#ffeb3b', strokeWidth: 18, opacity: 0.4, blendMode: 'multiply' },
+				data: { points: [{ x: 0.1, y: 0.2 }, { x: 0.5, y: 0.2 }], smooth: true },
+			},
+			{
+				id: 94,
+				uuid: 'hl-pressure-saved',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				type: 'highlight',
+				x: 0.1,
+				y: 0.4,
+				width: 0.4,
+				height: 0.02,
+				style: { stroke: '#76ff03', strokeWidth: 18, opacity: 0.4, blendMode: 'multiply' },
+				data: { points: [{ x: 0.1, y: 0.4, p: 0.5 }, { x: 0.5, y: 0.4, p: 0.8 }], smooth: true },
+			},
+		]
+
+		const lightWrapper = mount(SongAnnotationOverlay, {
+			props: { annotations, pageNumber: 1, visible: true, nightMode: false },
+		})
+		const lightPaths = lightWrapper.findAll('[data-test="annotation-drawing"]')
+		expect(lightPaths).toHaveLength(2)
+		expect(lightPaths[0].attributes('style')).toContain('mix-blend-mode: multiply')
+		expect(lightPaths[1].attributes('style')).toContain('mix-blend-mode: multiply')
+
+		const nightWrapper = mount(SongAnnotationOverlay, {
+			props: { annotations, pageNumber: 1, visible: true, nightMode: true },
+		})
+		const nightPaths = nightWrapper.findAll('[data-test="annotation-drawing"]')
+		expect(nightPaths).toHaveLength(2)
+		expect(nightPaths[0].attributes('style')).toContain('mix-blend-mode: screen')
+		expect(nightPaths[1].attributes('style')).toContain('mix-blend-mode: screen')
+	})
+
+	it('snaps highlighter and pen strokes to 45-degree axes via Shift or toolStyle.snapToAxis on non-square pages', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 1,
+				pageWidth: 595,
+				pageHeight: 842,
+				visible: true,
+				editable: true,
+				activeTool: 'highlight',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 595,
+			height: 842,
+			right: 595,
+			bottom: 842,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		// Drag slightly off-horizontal with Shift held -> snaps to exact horizontal 2-point stroke
+		await svg.trigger('pointerdown', { button: 0, pointerType: 'mouse', clientX: 100, clientY: 200, pointerId: 1, shiftKey: true })
+		await svg.trigger('pointermove', { button: 0, pointerType: 'mouse', clientX: 250, clientY: 220, pointerId: 1, shiftKey: true })
+		await svg.trigger('pointermove', { button: 0, pointerType: 'mouse', clientX: 400, clientY: 230, pointerId: 1, shiftKey: true })
+		await svg.trigger('pointerup', { button: 0, pointerType: 'mouse', clientX: 400, clientY: 230, pointerId: 1, shiftKey: true })
+
+		const hlCreated = wrapper.emitted('create-annotation')?.[0]?.[0] as SheetAnnotation
+		expect(hlCreated).toBeTruthy()
+		expect(hlCreated.type).toBe('highlight')
+		expect(hlCreated.data.points).toHaveLength(2)
+		expect(hlCreated.data.points?.[0].y).toBe(hlCreated.data.points?.[1].y)
+
+		// Now switch to drawing tool with snapToAxis: true (no Shift key) and drag at ~40° -> snaps to exact visual 45°
+		await wrapper.setProps({
+			activeTool: 'drawing',
+			toolStyle: {
+				color: '#e53935',
+				highlightColor: '#ffeb3b',
+				strokeWidth: 2.5,
+				highlightWidth: 18,
+				opacity: 1,
+				highlightOpacity: 0.4,
+				lineStyle: 'solid',
+				fontSize: 22,
+				fontFamily: 'sans-serif',
+				textAlign: 'left',
+				fill: 'transparent',
+				shapeHeight: 18,
+				stampSymbol: '\uE52F',
+				stampSize: 40,
+				snapToAxis: true,
+			},
+		})
+
+		await svg.trigger('pointerdown', { button: 0, pointerType: 'touch', clientX: 100, clientY: 200, pointerId: 2 })
+		await svg.trigger('pointermove', { button: 0, pointerType: 'touch', clientX: 280, clientY: 360, pointerId: 2 })
+		await svg.trigger('pointerup', { button: 0, pointerType: 'touch', clientX: 280, clientY: 360, pointerId: 2 })
+
+		const drawCreated = wrapper.emitted('create-annotation')?.[1]?.[0] as SheetAnnotation
+		expect(drawCreated).toBeTruthy()
+		expect(drawCreated.type).toBe('drawing')
+		expect(drawCreated.data.points).toHaveLength(2)
+		const p0 = drawCreated.data.points![0]
+		const p1 = drawCreated.data.points![1]
+		const dxPx = (p1.x - p0.x) * 595
+		const dyPx = (p1.y - p0.y) * 842
+		expect(Math.abs(dxPx - dyPx)).toBeLessThan(1.5)
+	})
+
+	it('snaps endpoint handle drag to 45-degree axes when Shift is held', async () => {
+		const lineAnn: SheetAnnotation = {
+			id: 95,
+			uuid: 'line-snap-1',
+			songId: 10,
+			fileId: 20,
+			pageNumber: 0,
+			type: 'shape',
+			x: 0.2,
+			y: 0.2,
+			width: 0.3,
+			height: 0.01,
+			style: { stroke: '#000000', strokeWidth: 2.5 },
+			data: { shapeType: 'line', points: [{ x: 0.2, y: 0.2 }, { x: 0.5, y: 0.2 }] },
+		}
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [lineAnn],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'select',
+				selectedUuid: 'line-snap-1',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		const p1Handle = wrapper.find('[data-resize-handle="p1"]')
+		expect(p1Handle.exists()).toBe(true)
+
+		// Drag p1 almost vertically below p0 with Shift held -> snaps to exact vertical (x = 0.2)
+		await p1Handle.trigger('pointerdown', { button: 0, pointerType: 'mouse', clientX: 500, clientY: 200, pointerId: 3, shiftKey: true })
+		await svg.trigger('pointermove', { button: 0, pointerType: 'mouse', clientX: 230, clientY: 600, pointerId: 3, shiftKey: true })
+		await svg.trigger('pointerup', { button: 0, pointerType: 'mouse', clientX: 230, clientY: 600, pointerId: 3, shiftKey: true })
+
+		const updated = wrapper.emitted('update-annotation')?.[0]?.[1] as SheetAnnotation
+		expect(updated).toBeTruthy()
+		expect(updated.data.points?.[1].x).toBe(0.2)
+		expect(updated.data.points?.[1].y).toBeGreaterThan(0.55)
+	})
 })

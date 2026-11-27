@@ -26,6 +26,7 @@ export function createDefaultToolStyle(): EditorToolStyle {
 		shapeHeight: 18,
 		stampSymbol: MUSIC_STAMPS.find((s) => s.symbol === '\uE52F')?.symbol ?? '\uE52F',
 		stampSize: 40,
+		snapToAxis: false,
 	}
 }
 

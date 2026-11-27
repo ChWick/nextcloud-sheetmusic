@@ -13,6 +13,7 @@ import {
 	getStampRenderPosition,
 	hasPressurePoints,
 	isPathShape,
+	resolveAnnotationBlendMode,
 	VIEWBOX_WIDTH,
 } from '../../utils/annotation'
 import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
@@ -57,8 +58,8 @@ const borderColor = computed(() =>
 		? adaptAnnotationColorForNight(props.item.style.borderColor, props.nightMode, '#000000')
 		: 'transparent',
 )
-const highlightBlendMode = computed(() =>
-	props.item.style?.blendMode || (props.nightMode ? 'screen' : 'multiply'),
+const itemBlendMode = computed(() =>
+	resolveAnnotationBlendMode(props.item, props.nightMode),
 )
 
 const emit = defineEmits<{
@@ -119,6 +120,7 @@ const textLayout = computed(() =>
 <template>
 	<g
 		:data-ann-uuid="item.uuid"
+		class="sheetmusic-annotation-item"
 		:class="{
 			'is-hovered-select': hoveredSelect,
 			'is-hovered-eraser': hoveredEraser,
@@ -131,7 +133,7 @@ const textLayout = computed(() =>
 				:fill="strokeColor"
 				stroke="none"
 				:opacity="item.style?.opacity ?? 1.0"
-				:style="{ mixBlendMode: item.style?.blendMode || 'normal' }"
+				:style="{ mixBlendMode: itemBlendMode }"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-drawing"
 				data-pressure-stroke="true" />
@@ -142,7 +144,7 @@ const textLayout = computed(() =>
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
-				:style="{ mixBlendMode: item.type === 'highlight' ? highlightBlendMode : (item.style?.blendMode || 'normal') }"
+				:style="{ mixBlendMode: itemBlendMode }"
 				fill="none"
 				stroke-linecap="round"
 				stroke-linejoin="round"
@@ -171,7 +173,7 @@ const textLayout = computed(() =>
 			:height="item.height * vbHeight"
 			:fill="strokeColor"
 			:opacity="item.style?.opacity ?? 0.4"
-			:style="{ mixBlendMode: highlightBlendMode }"
+			:style="{ mixBlendMode: itemBlendMode }"
 			:data-ann-uuid="item.uuid"
 			data-test="annotation-drawing" />
 

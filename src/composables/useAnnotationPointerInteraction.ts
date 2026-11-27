@@ -20,7 +20,9 @@ import {
 	applyResizeMove,
 	buildAnnotationDraft,
 	cloneAnnotation,
+	isSnappableLineTool,
 	roundNorm,
+	snapPointToAxis,
 } from '../utils/annotationTransform'
 import {
 	applyPenTipOffset,
@@ -281,18 +283,37 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 	}
 
+	function isAxisSnapActive(tool: EditorTool, shiftKey: boolean): boolean {
+		if (!isSnappableLineTool(tool)) return false
+		if (shiftKey) return true
+		return !isStylusQuickDrawOnly() && Boolean(opts.toolStyle.value.snapToAxis)
+	}
+
 	function buildDraftFromTool(
 		p1: NormalizedPoint,
 		p2: NormalizedPoint,
 		strokePoints: NormalizedPoint[],
+		shiftKey = false,
 	): Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> | null {
+		const tool = effectiveTool()
+		let effectiveP2 = p2
+		let effectivePoints = strokePoints
+
+		if (isAxisSnapActive(tool, shiftKey)) {
+			const cleanStart: NormalizedPoint = { x: p1.x, y: p1.y }
+			effectiveP2 = snapPointToAxis(cleanStart, p2, opts.vbHeight.value)
+			if (tool === 'drawing' || tool === 'highlight') {
+				effectivePoints = [cleanStart, effectiveP2]
+			}
+		}
+
 		return buildAnnotationDraft(
-			effectiveTool(),
+			tool,
 			opts.toolStyle.value,
 			opts.pageIndex.value,
 			p1,
-			p2,
-			strokePoints,
+			effectiveP2,
+			effectivePoints,
 		)
 	}
 
@@ -608,7 +629,14 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (state.kind === 'endpoint' && state.targetBefore && state.handle) {
-			const next = applyEndpointMove(state.targetBefore, state.handle, pt)
+			let targetPt = pt
+			if (e.shiftKey || Boolean(opts.toolStyle.value.snapToAxis)) {
+				const anchor = state.targetBefore.data.points?.[state.handle === 'p0' ? 1 : 0]
+				if (anchor) {
+					targetPt = snapPointToAxis(anchor, pt, opts.vbHeight.value)
+				}
+			}
+			const next = applyEndpointMove(state.targetBefore, state.handle, targetPt)
 			if (next) previewAnnotation.value = next
 			return
 		}
@@ -634,7 +662,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			if (tool === 'handwriting') {
 				activeHandwritingStroke.value = [...state.points]
 			} else {
-				setDraftPreview(buildDraftFromTool(state.startNorm, pt, state.points))
+				setDraftPreview(buildDraftFromTool(state.startNorm, pt, state.points, e.shiftKey))
 			}
 		}
 	}
@@ -749,7 +777,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			if (isStylusQuickDrawOnly()) {
 				lastQuickDrawPenAt = Date.now()
 			}
-			const draft = buildDraftFromTool(state.startNorm, pt, state.points)
+			const draft = buildDraftFromTool(state.startNorm, pt, state.points, e.shiftKey)
 			if (draft) {
 				opts.onCreate(draft)
 			}

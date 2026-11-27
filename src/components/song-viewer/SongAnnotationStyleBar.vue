@@ -7,11 +7,13 @@ import FormatAlignCenter from 'vue-material-design-icons/FormatAlignCenter.vue'
 import FormatAlignLeft from 'vue-material-design-icons/FormatAlignLeft.vue'
 import FormatAlignRight from 'vue-material-design-icons/FormatAlignRight.vue'
 import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
+import Ruler from 'vue-material-design-icons/Ruler.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 import SongAnnotationColorPicker, { type ColorSwatch } from './SongAnnotationColorPicker.vue'
 import SongAnnotationLineStylePicker from './SongAnnotationLineStylePicker.vue'
 import SongAnnotationLogSelect from './SongAnnotationLogSelect.vue'
 import { LINK_LABEL_PRESETS, type LinkMarkerStyle } from '../../utils/annotationLinks'
+import { isSnappableLineTool } from '../../utils/annotationTransform'
 
 const props = withDefaults(
 	defineProps<{
@@ -98,6 +100,10 @@ const showStrokeWidth = computed(() =>
 
 const showLineStyle = computed(() =>
 	props.activeTool === 'drawing' || props.isShapeActive || hasLineStyleSelected.value,
+)
+
+const showSnapToAxis = computed(() =>
+	!hasSelection.value && isSnappableLineTool(props.activeTool),
 )
 
 const showFontSize = computed(() =>
@@ -336,6 +342,20 @@ function updateShapeHeight(height: number) {
 			<SongAnnotationLineStylePicker
 				:model-value="currentLineStyle"
 				@update:model-value="updateLineStyle" />
+		</div>
+
+		<!-- Straight-line Axis Snapping (for Pen, Highlighter & 2-point Shapes) -->
+		<div v-if="showSnapToAxis" :class="$style.styleGroup">
+			<button
+				type="button"
+				:class="[$style.chipBtn, toolStyle.snapToAxis && $style.active]"
+				:aria-pressed="Boolean(toolStyle.snapToAxis)"
+				:title="t('sheetmusic', 'Snap to straight 45° lines (or hold Shift)')"
+				data-test="annotation-snap-toggle"
+				@click="patchToolStyle({ snapToAxis: !toolStyle.snapToAxis })">
+				<Ruler :size="15" />
+				<span>{{ t('sheetmusic', 'Snap') }}</span>
+			</button>
 		</div>
 
 		<!-- Shape Height (for Hairpins, Slurs, Brackets) -->

@@ -533,6 +533,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 				placeholder.replaceChildren(canvas)
 				canvas = null
 				placeholder.style.position = 'relative'
+				placeholder.style.isolation = 'isolate'
 				placeholder.style.minHeight = ''
 				placeholder.style.minWidth = ''
 				placeholder.dataset.pageWidth = String(viewport.width)
@@ -1236,7 +1237,7 @@ button[type='button'].linkJumpBackChip:hover {
 	transition: filter 0.15s ease;
 }
 
-.pdfStage :global(.sheetmusic-annotation-layer) {
+.pdfStage :global(.sheetmusic-annotation-item) {
 	filter: var(--sheetmusic-annotation-filter, none);
 	transition: filter 0.15s ease;
 }
