@@ -34,4 +34,21 @@ describe('ConcertModeUnlockBadge (real timers, no mocks)', () => {
 		expect(wrapper.emitted('unlock')).toHaveLength(1)
 		await btn.trigger('pointerup')
 	})
+
+	it('cancels hold cleanly on pointerleave without unlocking', async () => {
+		const wrapper = mount(ConcertModeUnlockBadge, {
+			props: {
+				holdMs: 80,
+			},
+		})
+
+		const btn = wrapper.find('[data-test="concert-mode-unlock-button"]')
+		await btn.trigger('pointerdown')
+		await waitMs(30)
+		await btn.trigger('pointerleave')
+		await waitMs(80)
+		await wrapper.vm.$nextTick()
+
+		expect(wrapper.emitted('unlock')).toBeUndefined()
+	})
 })
