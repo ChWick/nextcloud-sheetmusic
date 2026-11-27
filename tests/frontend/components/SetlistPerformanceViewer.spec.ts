@@ -119,6 +119,11 @@ describe('SetlistPerformanceViewer', () => {
 		})
 		await wrapper.vm.$nextTick()
 
+		const turnModeTrigger = document.body.querySelector('[data-test="double-page-turn-mode-trigger"]') as HTMLButtonElement | null
+		expect(turnModeTrigger).not.toBeNull()
+		turnModeTrigger!.click()
+		await wrapper.vm.$nextTick()
+
 		const stepButton = document.body.querySelector('button[data-turn-mode="step"]') as HTMLButtonElement | null
 		expect(stepButton).not.toBeNull()
 		stepButton!.click()

@@ -22,7 +22,7 @@ describe('SetlistPerformanceBottomBar', () => {
 
 		expect(wrapper.text()).toContain('3 / 2')
 		expect(wrapper.find('button[aria-label="Fit Page"]').exists()).toBe(true)
-		expect(wrapper.find('button[data-turn-mode="step"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="double-page-turn-mode-trigger"]').exists()).toBe(true)
 
 		await wrapper.find('button[aria-label="Previous song"]').trigger('click')
 		await wrapper.find('button[aria-label="Previous page"]').trigger('click')
@@ -30,6 +30,7 @@ describe('SetlistPerformanceBottomBar', () => {
 		await wrapper.find('button[aria-label="Next song"]').trigger('click')
 		await wrapper.find('button[aria-label="Setlist items"]').trigger('click')
 		await wrapper.find('[data-test="performance-bottom-night-toggle"]').trigger('click')
+		await wrapper.find('[data-test="double-page-turn-mode-trigger"]').trigger('click')
 		await wrapper.find('button[data-turn-mode="step"]').trigger('click')
 
 		const layoutSelect = wrapper.findComponent({ name: 'NcSelect' })
@@ -64,7 +65,7 @@ describe('SetlistPerformanceBottomBar', () => {
 			},
 		})
 
-		expect(wrapper.find('button[data-turn-mode="half"]').exists()).toBe(false)
+		expect(wrapper.find('[data-test="double-page-turn-mode-trigger"]').exists()).toBe(false)
 		expect(wrapper.find('button[aria-label="Fit Width"]').exists()).toBe(true)
 	})
 })

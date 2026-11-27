@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
@@ -117,6 +117,21 @@ const selectedLayoutOption = computed<LayoutOption>({
 		}
 	},
 })
+const turnModeSelectorRef = ref<InstanceType<typeof DoublePageTurnModeSelector> | null>(null)
+
+watch(() => props.visible, (visible) => {
+	if (!visible) {
+		turnModeSelectorRef.value?.close()
+	}
+})
+
+function onTurnModeMenuOpenChange(open: boolean) {
+	if (open) {
+		emit('pauseAutoHide')
+	} else {
+		emit('resumeAutoHide')
+	}
+}
 </script>
 
 <template>
@@ -200,8 +215,10 @@ const selectedLayoutOption = computed<LayoutOption>({
 
 			<DoublePageTurnModeSelector
 				v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"
+				ref="turnModeSelectorRef"
 				:model-value="doublePageTurnMode"
-				@update:model-value="emit('changeDoublePageTurnMode', $event)" />
+				@update:model-value="emit('changeDoublePageTurnMode', $event)"
+				@update:open="onTurnModeMenuOpenChange" />
 
 			<NcButton
 				v-if="showSetlistControls && (layoutChoice === 'auto' || effectiveLayout === 'double')"
