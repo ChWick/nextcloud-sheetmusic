@@ -65,6 +65,12 @@ describe('useAutoScroll (real timers & real DOM scrollTop)', () => {
 		expect(elShort.scrollTop).toBe(20)
 		expect(fastScroller.isRunning.value).toBe(false)
 
+		// Starting again from the bottom automatically rewinds to top and scrolls
+		fastScroller.start()
+		expect(elShort.scrollTop).toBe(0)
+		expect(fastScroller.isRunning.value).toBe(true)
+		fastScroller.stop()
+
 		scroller.resetToTop()
 		expect(el.scrollTop).toBe(0)
 		scroller.stop()

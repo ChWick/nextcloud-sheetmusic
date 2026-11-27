@@ -128,6 +128,13 @@ export function useAutoScroll(options: UseAutoScrollOptions) {
 	function start() {
 		if (isRunning.value || countdownRemaining.value > 0) return
 		options.onBeforeStart?.()
+		const el = options.getContainer()
+		if (el) {
+			const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight)
+			if (maxScroll > 0 && el.scrollTop >= maxScroll - 1) {
+				el.scrollTop = 0
+			}
+		}
 		isPaused.value = false
 		const delay = startDelaySeconds.value
 		if (delay > 0) {
