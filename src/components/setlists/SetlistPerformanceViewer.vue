@@ -12,7 +12,8 @@ import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplement
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
 import ConcertModeUnlockBadge from './ConcertModeUnlockBadge.vue'
 import PerformanceToolsButtons from './PerformanceToolsButtons.vue'
-import { fetchSongAnnotations } from '../../api/annotations'
+import { deleteSongAnnotation, fetchSongAnnotations, saveSongAnnotation } from '../../api/annotations'
+import { createUuid } from '../../composables/useAnnotationEditor'
 import { useAutoScroll } from '../../composables/useAutoScroll'
 import { useHudAutoHide } from '../../composables/useHudAutoHide'
 import { useMetronome } from '../../composables/useMetronome'
@@ -301,6 +302,13 @@ function buildVersionedPath(file: SongFile | null): string {
 }
 
 const currentFile = computed(() => pickPrimaryFile(currentSong.value, isSingleSongMode.value ? props.preferredFileId : undefined))
+const currentFileId = computed(() => Number(
+	currentFile.value?.fileId ?? currentFile.value?.id
+	?? currentSong.value?.files?.[0]?.fileId ?? currentSong.value?.files?.[0]?.id ?? 0,
+))
+const canStylusQuickDraw = computed(() =>
+	!isConcertMode.value && Boolean(currentSong.value) && currentFileId.value > 0 && props.libraryId > 0,
+)
 const currentFilePath = computed(() => buildVersionedPath(currentFile.value))
 const currentPageOrder = computed(() => currentFile.value?.pageOrder ?? null)
 const currentTargetPage = computed(() => {
@@ -374,9 +382,9 @@ function preloadNextSong() {
 		})
 }
 
-watch([currentSong, currentFile], async ([song, file]) => {
+watch([currentSong, currentFile], async ([song]) => {
 	const reqId = ++annotationRequestId
-	const targetFileId = Number(file?.fileId ?? file?.id ?? song?.files?.[0]?.fileId ?? song?.files?.[0]?.id ?? 0)
+	const targetFileId = currentFileId.value
 	annotationLayers.value = getCachedFileAnnotationLayers(targetFileId)
 	if (targetFileId > 0) {
 		void loadFileAnnotationLayers(targetFileId).then((loaded) => {
@@ -495,10 +503,7 @@ function onToggleAnnotations() {
 function onToggleLayerVisibility(layerId: number) {
 	const next = toggleAnnotationLayerVisibility(annotationLayers.value, layerId)
 	annotationLayers.value = next
-	const targetFileId = Number(
-		currentFile.value?.fileId ?? currentFile.value?.id
-		?? currentSong.value?.files?.[0]?.fileId ?? currentSong.value?.files?.[0]?.id ?? 0,
-	)
+	const targetFileId = currentFileId.value
 	if (targetFileId > 0) {
 		void persistFileAnnotationLayers(targetFileId, next)
 	}
@@ -506,6 +511,46 @@ function onToggleLayerVisibility(layerId: number) {
 	if (toggled?.visible && !showAnnotations.value) {
 		showAnnotations.value = true
 		previewerRef.value?.toggleAnnotations()
+	}
+}
+
+async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) {
+	if (!canStylusQuickDraw.value || !currentSong.value) return
+	const songId = currentSong.value.id
+	const fileId = currentFileId.value
+	const reqIdAtStart = annotationRequestId
+	const visibleLayer = annotationLayers.value.find((l) => l.visible)
+	const targetLayerId = visibleLayer?.id ?? 0
+	const optimistic: SheetAnnotation = {
+		...draft,
+		uuid: draft.uuid || createUuid(),
+		songId,
+		fileId,
+		layerId: draft.layerId ?? targetLayerId,
+	}
+	annotations.value = [...annotations.value, optimistic]
+	if (!showAnnotations.value) {
+		showAnnotations.value = true
+		previewerRef.value?.toggleAnnotations()
+	}
+	try {
+		const saved = await saveSongAnnotation(songId, optimistic)
+		if (reqIdAtStart !== annotationRequestId) return
+		annotations.value = annotations.value.map((a) => (a.uuid === optimistic.uuid ? saved : a))
+	} catch {
+		// Keep optimistic stroke locally if offline or transient save error
+	}
+}
+
+async function onQuickDeleteAnnotation(ann: SheetAnnotation) {
+	if (!canStylusQuickDraw.value) return
+	annotations.value = annotations.value.filter((a) => a.uuid !== ann.uuid)
+	if (ann.id) {
+		try {
+			await deleteSongAnnotation(ann.id)
+		} catch {
+			// Ignore transient delete errors
+		}
 	}
 }
 
@@ -748,10 +793,13 @@ onUnmounted(() => {
 					:score-brightness="scoreBrightness"
 					:score-sepia="scoreSepia"
 					:lock-zoom="isConcertMode"
+					:stylus-quick-draw="canStylusQuickDraw"
 					:file-id="currentFile?.fileId"
 					:initial-crop-boxes="currentFile?.cropBoxes ?? null"
 					:next-file-id="nextFile?.fileId"
-					:next-initial-crop-boxes="nextFile?.cropBoxes ?? null" />
+					:next-initial-crop-boxes="nextFile?.cropBoxes ?? null"
+					@create-annotation="onQuickCreateAnnotation"
+					@delete-annotation="onQuickDeleteAnnotation" />
 				<div v-else :class="$style.emptyFile">
 					{{ t('sheetmusic', 'No score file attached to this song.') }}
 				</div>

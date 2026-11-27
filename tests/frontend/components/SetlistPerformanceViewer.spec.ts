@@ -38,6 +38,7 @@ vi.mock('../../../src/components/FilePreviewer.vue', () => ({
 			'initialDoublePageTurnMode',
 			'initialZoomMode',
 			'lockZoom',
+			'stylusQuickDraw',
 		],
 		setup(_props: unknown, { expose }: { expose: (exposed: Record<string, unknown>) => void }) {
 			expose({
@@ -56,7 +57,7 @@ vi.mock('../../../src/components/FilePreviewer.vue', () => ({
 			})
 			return {}
 		},
-		template: '<div class="mock-file-previewer" :data-file-path="filePath" :data-target-page="targetPage" :data-initial-layout="initialPageLayout" :data-lock-zoom="String(Boolean(lockZoom))" />',
+		template: '<div class="mock-file-previewer" :data-file-path="filePath" :data-target-page="targetPage" :data-initial-layout="initialPageLayout" :data-lock-zoom="String(Boolean(lockZoom))" :data-stylus-quick-draw="String(Boolean(stylusQuickDraw))" />',
 	},
 }))
 
@@ -358,6 +359,8 @@ describe('SetlistPerformanceViewer', () => {
 			attachTo: document.body,
 		})
 
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-stylus-quick-draw')).toBe('true')
+
 		const lockBtn = document.body.querySelector('[data-test="performance-concert-mode-button"]') as HTMLButtonElement | null
 		expect(lockBtn).not.toBeNull()
 		lockBtn!.click()
@@ -368,6 +371,7 @@ describe('SetlistPerformanceViewer', () => {
 		const footer = document.body.querySelector('footer') as HTMLElement
 		expect(overlay.getAttribute('data-concert-mode')).toBe('true')
 		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-lock-zoom')).toBe('true')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-stylus-quick-draw')).toBe('false')
 		expect(header.style.display).toBe('none')
 		expect(footer.style.display).toBe('none')
 
@@ -382,14 +386,16 @@ describe('SetlistPerformanceViewer', () => {
 		await wrapper.vm.$nextTick()
 		expect(document.body.textContent).toContain('Song Two')
 		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-lock-zoom')).toBe('true')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-stylus-quick-draw')).toBe('false')
 
-		// Unlocking via ConcertModeUnlockBadge restores HUD and unlocks zoom
+		// Unlocking via ConcertModeUnlockBadge restores HUD, zoom, and stylus quick-draw
 		const badge = wrapper.findComponent({ name: 'ConcertModeUnlockBadge' })
 		expect(badge.exists()).toBe(true)
 		badge.vm.$emit('unlock')
 		await wrapper.vm.$nextTick()
 		expect(overlay.getAttribute('data-concert-mode')).toBe('false')
 		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-lock-zoom')).toBe('false')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-stylus-quick-draw')).toBe('true')
 		expect(header.style.display).not.toBe('none')
 		expect(footer.style.display).not.toBe('none')
 
