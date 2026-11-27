@@ -18,6 +18,12 @@ describe('DoublePageTurnModeSelector', () => {
 		expect(stepBtn.attributes('aria-pressed')).toBe('false')
 		expect(spreadBtn.attributes('aria-pressed')).toBe('false')
 
+		// Each button illustrates the 1/2 -> next spread transition with an arrow
+		expect(halfBtn.findAll('text').map((n) => n.text())).toEqual(['1', '2', '3', '2'])
+		expect(stepBtn.findAll('text').map((n) => n.text())).toEqual(['1', '2', '2', '3'])
+		expect(spreadBtn.findAll('text').map((n) => n.text())).toEqual(['1', '2', '3', '4'])
+		expect(halfBtn.find('svg path').exists()).toBe(true)
+
 		await spreadBtn.trigger('click')
 		expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['spread'])
 	})

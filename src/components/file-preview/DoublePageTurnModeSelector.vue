@@ -47,56 +47,99 @@ const options: TurnModeOption[] = [
 		<NcButton
 			v-for="opt in options"
 			:key="opt.mode"
+			:class="$style.turnModeBtn"
 			:variant="modelValue === opt.mode ? 'primary' : 'secondary'"
 			:title="opt.label"
 			:aria-label="opt.label"
 			:aria-pressed="modelValue === opt.mode"
 			:data-turn-mode="opt.mode"
 			@click="emit('update:modelValue', opt.mode)">
-			<template #icon>
-				<svg
-					:class="$style.icon"
-					viewBox="0 0 34 22"
-					width="30"
-					height="20"
-					aria-hidden="true">
-					<!-- Left mini page -->
+			<svg
+				:class="$style.icon"
+				viewBox="0 0 74 22"
+				width="78"
+				height="24"
+				aria-hidden="true">
+				<!-- Starting spread: 1 / 2 -->
+				<g :class="$style.startSpread">
 					<rect
-						x="1.5"
+						x="1"
 						y="2"
-						width="14"
+						width="13"
 						height="18"
-						rx="2"
-						:fill="opt.highlightLeft ? 'currentColor' : 'none'"
-						:fill-opacity="opt.highlightLeft ? 0.18 : 0"
-						stroke="currentColor"
-						stroke-width="1.5" />
-					<text
-						x="8.5"
-						y="14.5"
-						text-anchor="middle"
-						font-size="10"
-						font-weight="700"
-						fill="currentColor">{{ opt.leftNum }}</text>
-					<!-- Right mini page -->
-					<rect
-						x="18.5"
-						y="2"
-						width="14"
-						height="18"
-						rx="2"
+						rx="1.8"
 						fill="none"
 						stroke="currentColor"
-						stroke-width="1.5" />
+						stroke-width="1.4" />
 					<text
-						x="25.5"
+						x="7.5"
 						y="14.5"
 						text-anchor="middle"
 						font-size="10"
-						font-weight="700"
-						fill="currentColor">{{ opt.rightNum }}</text>
-				</svg>
-			</template>
+						font-weight="600"
+						fill="currentColor">1</text>
+					<rect
+						x="15.5"
+						y="2"
+						width="13"
+						height="18"
+						rx="1.8"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.4" />
+					<text
+						x="22"
+						y="14.5"
+						text-anchor="middle"
+						font-size="10"
+						font-weight="600"
+						fill="currentColor">2</text>
+				</g>
+
+				<!-- Transition arrow -->
+				<path
+					d="M31.5 11 H41.5 M38 7.5 L41.5 11 L38 14.5"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.6"
+					stroke-linecap="round"
+					stroke-linejoin="round" />
+
+				<!-- Resulting spread -->
+				<rect
+					x="44.5"
+					y="2"
+					width="13"
+					height="18"
+					rx="1.8"
+					:fill="opt.highlightLeft ? 'currentColor' : 'none'"
+					:fill-opacity="opt.highlightLeft ? 0.18 : 0"
+					stroke="currentColor"
+					stroke-width="1.5" />
+				<text
+					x="51"
+					y="14.5"
+					text-anchor="middle"
+					font-size="10"
+					font-weight="700"
+					fill="currentColor">{{ opt.leftNum }}</text>
+				<rect
+					x="59"
+					y="2"
+					width="13"
+					height="18"
+					rx="1.8"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5" />
+				<text
+					x="65.5"
+					y="14.5"
+					text-anchor="middle"
+					font-size="10"
+					font-weight="700"
+					fill="currentColor">{{ opt.rightNum }}</text>
+			</svg>
 		</NcButton>
 	</div>
 </template>
@@ -105,10 +148,20 @@ const options: TurnModeOption[] = [
 .segmentedGroup {
 	display: inline-flex;
 	align-items: center;
-	gap: 2px;
+	gap: 4px;
+}
+
+.turnModeBtn {
+	min-width: auto !important;
+	padding-left: 8px !important;
+	padding-right: 8px !important;
 }
 
 .icon {
 	display: block;
+}
+
+.startSpread {
+	opacity: 0.72;
 }
 </style>
