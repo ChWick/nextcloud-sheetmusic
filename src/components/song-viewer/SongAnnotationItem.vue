@@ -33,16 +33,27 @@ const props = withDefaults(defineProps<{
 	nightMode: false,
 })
 
-const strokeColor = computed(() =>
-	adaptAnnotationColorForNight(props.item.style?.stroke, props.nightMode, '#e53935'),
-)
+const strokeColor = computed(() => {
+	if (props.item.type === 'highlight') {
+		return props.item.style?.stroke || '#ffeb3b'
+	}
+	return adaptAnnotationColorForNight(props.item.style?.stroke, props.nightMode, '#e53935')
+})
 const inkColor = computed(() =>
 	adaptAnnotationColorForNight(props.item.style?.color, props.nightMode, '#000000'),
+)
+const textBgColor = computed(() =>
+	props.item.style?.backgroundColor && props.item.style.backgroundColor !== 'transparent'
+		? adaptAnnotationColorForNight(props.item.style.backgroundColor, props.nightMode, 'transparent')
+		: 'transparent',
 )
 const borderColor = computed(() =>
 	props.item.style?.borderColor
 		? adaptAnnotationColorForNight(props.item.style.borderColor, props.nightMode, '#000000')
 		: 'transparent',
+)
+const highlightBlendMode = computed(() =>
+	props.item.style?.blendMode || (props.nightMode ? 'screen' : 'multiply'),
 )
 
 const emit = defineEmits<{
@@ -51,7 +62,9 @@ const emit = defineEmits<{
 }>()
 
 const linkColors = computed(() =>
-	props.item.type === 'link' ? resolveLinkColors(props.item.style?.color) : null,
+	props.item.type === 'link'
+		? resolveLinkColors(adaptAnnotationColorForNight(props.item.style?.color, props.nightMode, '#0052cc'))
+		: null,
 )
 const linkCircle = computed(() =>
 	props.item.type === 'link' && getLinkStyle(props.item) === 'circle'
@@ -124,7 +137,7 @@ const textLayout = computed(() =>
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
-				:style="{ mixBlendMode: item.style?.blendMode || (item.type === 'highlight' ? 'multiply' : 'normal') }"
+				:style="{ mixBlendMode: item.type === 'highlight' ? highlightBlendMode : (item.style?.blendMode || 'normal') }"
 				fill="none"
 				stroke-linecap="round"
 				stroke-linejoin="round"
@@ -151,9 +164,9 @@ const textLayout = computed(() =>
 			:y="item.y * vbHeight"
 			:width="item.width * VIEWBOX_WIDTH"
 			:height="item.height * vbHeight"
-			:fill="item.style?.stroke || '#ffeb3b'"
+			:fill="strokeColor"
 			:opacity="item.style?.opacity ?? 0.4"
-			:style="{ mixBlendMode: item.style?.blendMode || 'multiply' }"
+			:style="{ mixBlendMode: highlightBlendMode }"
 			:data-ann-uuid="item.uuid"
 			data-test="annotation-drawing" />
 
@@ -254,7 +267,7 @@ const textLayout = computed(() =>
 				:y="textLayout.boxY"
 				:width="textLayout.boxWidth"
 				:height="textLayout.boxHeight"
-				:fill="item.style?.backgroundColor || 'transparent'"
+				:fill="textBgColor"
 				:stroke="borderColor"
 				:stroke-width="item.style?.borderColor ? 1.5 : 10"
 				:vector-effect="item.style?.borderColor ? undefined : 'non-scaling-stroke'"
