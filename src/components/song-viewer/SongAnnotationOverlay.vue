@@ -310,7 +310,7 @@ function handleOpenLinkPicker() {
 			@pointermove="onPointerMove"
 			@pointerup="onPointerUp"
 			@pointercancel="onPointerCancel"
-			@click="onOverlayClick"
+			@click.capture="onOverlayClick"
 			@pointerleave="hoveredUuid = null">
 			<SongAnnotationItem
 				v-for="item in displayedAnnotations"

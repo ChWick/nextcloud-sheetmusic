@@ -223,4 +223,52 @@ describe('SongAnnotationOverlay Always-On Stylus Quick-Draw (no mocks)', () => {
 		expect(wrapper.emitted('create-annotation')).toBeUndefined()
 		wrapper.unmount()
 	})
+
+	it('does not trigger link jump when drawing with pen over a link, while normal clicks still jump', async () => {
+		const linkAnn: SheetAnnotation = {
+			id: 201,
+			uuid: 'ann-link-1',
+			songId: 5,
+			fileId: 10,
+			pageNumber: 0,
+			type: 'link',
+			x: 0.2,
+			y: 0.2,
+			width: 0.2,
+			height: 0.1,
+			data: {
+				targetPage: 2,
+				label: 'Coda',
+			},
+		}
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				pageNumber: 1,
+				visible: true,
+				editable: false,
+				stylusQuickDraw: true,
+				annotations: [linkAnn],
+			},
+			attachTo: document.body,
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]').element
+		attachRect(svg)
+		const linkEl = wrapper.find('[data-test="annotation-link"]').element
+
+		// Normal click on the link triggers jump-to-page
+		linkEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+		expect(wrapper.emitted('jump-to-page')).toHaveLength(1)
+
+		// Pen stroke over the link creates a drawing and suppresses the trailing link click
+		linkEl.dispatchEvent(makePointerEvent('pointerdown', { pointerType: 'pen', pointerId: 21, clientX: 120, clientY: 160 }))
+		linkEl.dispatchEvent(makePointerEvent('pointermove', { pointerType: 'pen', pointerId: 21, clientX: 180, clientY: 200 }))
+		linkEl.dispatchEvent(makePointerEvent('pointerup', { pointerType: 'pen', pointerId: 21, clientX: 180, clientY: 200 }))
+		linkEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+		expect(wrapper.emitted('create-annotation')).toHaveLength(1)
+		expect(wrapper.emitted('jump-to-page')).toHaveLength(1)
+		wrapper.unmount()
+	})
 })
