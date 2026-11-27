@@ -574,7 +574,7 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 			autoScroll.pause()
 			return true
 		}
-		return isConcertMode.value
+		return false
 	},
 	onEscape: () => {
 		if (isConcertMode.value) {
@@ -587,6 +587,12 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 			scheduleHudAutoHide()
 		} else if (isAppearancePopoverOpen.value) {
 			isAppearancePopoverOpen.value = false
+			scheduleHudAutoHide()
+		} else if (isPagePickerOpen.value) {
+			isPagePickerOpen.value = false
+			scheduleHudAutoHide()
+		} else if (isSupplementalDrawerOpen.value) {
+			isSupplementalDrawerOpen.value = false
 			scheduleHudAutoHide()
 		} else if (isSettingsOpen.value) {
 			isSettingsOpen.value = false
