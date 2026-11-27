@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { onUnmounted, ref, watch } from 'vue'
+import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { translate as t } from '@nextcloud/l10n'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import type { Bookmark } from '../../types/song'
 import type { LinkMarkerStyle } from '../../utils/annotationLinks'
-import { renderPdfPageToCanvas } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, releaseCanvas, renderPdfPageToCanvas } from '../../utils/pdfjs'
 
 const props = withDefaults(defineProps<{
 	role: 'source' | 'target'
@@ -29,14 +29,18 @@ const emit = defineEmits<{
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+let renderGeneration = 0
 
 async function renderPage() {
 	const doc = props.pdfDoc
 	const canvas = canvasRef.value
 	if (!doc || !canvas) return
+	const gen = ++renderGeneration
 	const clampedPage = Math.min(Math.max(1, props.pageIndex + 1), doc.numPages)
+	let page: PDFPageProxy | null = null
 	try {
-		const page = await doc.getPage(clampedPage)
+		page = await doc.getPage(clampedPage)
+		if (gen !== renderGeneration) return
 		const baseVp = page.getViewport({ scale: 1 })
 		const scale = 360 / Math.max(1, baseVp.width)
 		const vp = page.getViewport({ scale })
@@ -45,6 +49,8 @@ async function renderPage() {
 		await renderPdfPageToCanvas(page, canvas, vp, { dpr: Math.min(window.devicePixelRatio || 1, 2) })
 	} catch {
 		// Ignore transient PDF render errors in picker
+	} finally {
+		cleanupPdfJsPage(page)
 	}
 }
 
@@ -55,6 +61,11 @@ watch(
 	},
 	{ immediate: true },
 )
+
+onUnmounted(() => {
+	renderGeneration++
+	releaseCanvas(canvasRef.value)
+})
 
 function onSurfaceClick(event: MouseEvent) {
 	const el = event.currentTarget as HTMLElement | null
