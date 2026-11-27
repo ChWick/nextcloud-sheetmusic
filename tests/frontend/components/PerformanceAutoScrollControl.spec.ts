@@ -25,10 +25,13 @@ describe('PerformanceAutoScrollControl', () => {
 		expect(wrapper.find('[data-test="performance-autoscroll-popover"]').exists()).toBe(true)
 		expect(wrapper.find('[data-test="autoscroll-speed-value"]').text()).toBe('35 px/s')
 
-		// Adjust speed via +5, -5, and slider
+		// Adjust speed via +5, -5, and logarithmic slider (log2(80) ≈ 6.32)
 		await wrapper.find('[data-test="autoscroll-speed-plus"]').trigger('click')
 		await wrapper.find('[data-test="autoscroll-speed-minus"]').trigger('click')
-		await wrapper.find('[data-test="autoscroll-speed-slider"]').setValue('80')
+		const slider = wrapper.find('[data-test="autoscroll-speed-slider"]')
+		expect(Number(slider.attributes('min'))).toBeCloseTo(Math.log2(5), 4)
+		expect(Number(slider.attributes('max'))).toBeCloseTo(Math.log2(200), 4)
+		await slider.setValue(String(Math.log2(80)))
 		expect(wrapper.emitted('adjustSpeed')).toEqual([[5], [-5]])
 		expect(wrapper.emitted('update:speedPxPerSec')).toEqual([[80]])
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
+import LogRangeSlider from '../LogRangeSlider.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 
-const props = withDefaults(
+withDefaults(
 	defineProps<{
 		modelValue: number
 		presets: number[]
@@ -30,26 +31,9 @@ const emit = defineEmits<{
 
 const open = ref(false)
 
-const minLog = computed(() => Math.log2(Math.max(1, props.minValue)))
-const maxLog = computed(() => Math.log2(Math.max(props.minValue + 1, props.maxValue)))
-
-const sliderPos = computed(() => {
-	const clamped = Math.max(props.minValue, Math.min(props.maxValue, Number(props.modelValue) || props.minValue))
-	return Math.log2(clamped)
-})
-
 function pickPreset(value: number) {
 	emit('update:modelValue', value)
 	open.value = false
-}
-
-function onSliderInput(pos: number) {
-	const clampedPos = Math.max(minLog.value, Math.min(maxLog.value, pos))
-	const raw = Math.pow(2, clampedPos)
-	const rounded = props.allowHalfStep && raw < 4
-		? Math.round(raw * 2) / 2
-		: Math.round(raw)
-	emit('update:modelValue', Math.max(props.minValue, Math.min(props.maxValue, rounded)))
 }
 </script>
 
@@ -85,17 +69,15 @@ function onSliderInput(pos: number) {
 		</div>
 
 		<div :class="$style.sliderFooter" @click.stop>
-			<input
-				type="range"
-				:min="minLog"
-				:max="maxLog"
-				step="0.05"
-				:value="sliderPos"
-				:title="sliderLabel"
-				:aria-label="sliderLabel"
+			<LogRangeSlider
+				:model-value="modelValue"
+				:min-value="minValue"
+				:max-value="maxValue"
+				:allow-half-step="allowHalfStep"
+				:label="sliderLabel"
+				:test-id="sliderTestId"
 				:class="$style.slider"
-				:data-test="sliderTestId"
-				@input="onSliderInput(Number(($event.target as HTMLInputElement).value))">
+				@update:model-value="emit('update:modelValue', $event)" />
 		</div>
 	</ViewportPopover>
 </template>

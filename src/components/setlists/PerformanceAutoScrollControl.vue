@@ -6,6 +6,7 @@ import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import PauseIcon from 'vue-material-design-icons/Pause.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
+import LogRangeSlider from '../LogRangeSlider.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 import type { AutoScrollMode } from '../../composables/useAutoScroll'
 import {
@@ -142,16 +143,15 @@ const toggleLabel = computed(() => {
 						@click="emit('adjustSpeed', -5)">
 						−5
 					</button>
-					<input
-						type="range"
-						:min="AUTO_SCROLL_SPEED_MIN"
-						:max="AUTO_SCROLL_SPEED_MAX"
-						step="5"
-						:value="speedPxPerSec"
-						:aria-label="t('sheetmusic', 'Auto-scroll speed')"
+					<LogRangeSlider
+						:model-value="speedPxPerSec"
+						:min-value="AUTO_SCROLL_SPEED_MIN"
+						:max-value="AUTO_SCROLL_SPEED_MAX"
+						:step="0.02"
+						:label="t('sheetmusic', 'Auto-scroll speed')"
+						test-id="autoscroll-speed-slider"
 						:class="$style.slider"
-						data-test="autoscroll-speed-slider"
-						@input="emit('update:speedPxPerSec', Number(($event.target as HTMLInputElement).value))">
+						@update:model-value="emit('update:speedPxPerSec', $event)" />
 					<button
 						type="button"
 						:class="$style.stepBtn"

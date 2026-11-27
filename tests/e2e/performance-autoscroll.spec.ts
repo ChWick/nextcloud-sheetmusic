@@ -37,11 +37,11 @@ test.describe('Performance Mode Auto-Scroll', () => {
 		await layoutSelect.selectOption('single')
 		await expect(layoutSelect).toHaveValue('single')
 
-		// Open Auto-Scroll popover via side arrow, bump speed to 120 px/s so real scrolling is clearly measurable
+		// Open Auto-Scroll popover via side arrow, bump logarithmic speed slider to ~120 px/s
 		await dialog.locator('[data-test="performance-autoscroll-menu"]').click()
 		const popover = dialog.locator('[data-test="performance-autoscroll-popover"]')
 		await expect(popover).toBeVisible()
-		await popover.locator('[data-test="autoscroll-speed-slider"]').fill('120')
+		await popover.locator('[data-test="autoscroll-speed-slider"]').fill(String(Math.log2(120).toFixed(2)))
 		await expect(popover.locator('[data-test="autoscroll-speed-value"]')).toHaveText('120 px/s')
 
 		// Pressing Escape closes the popover without exiting Performance Mode
