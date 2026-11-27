@@ -167,4 +167,60 @@ describe('SongAnnotationOverlay Always-On Stylus Quick-Draw (no mocks)', () => {
 		expect(wrapper.emitted('create-annotation')).toBeUndefined()
 		wrapper.unmount()
 	})
+
+	it('keeps hidden annotations hidden until created and cancels an active stroke when stylusQuickDraw turns off', async () => {
+		const hiddenAnn: SheetAnnotation = {
+			id: 101,
+			uuid: 'ann-hidden-1',
+			songId: 5,
+			fileId: 10,
+			pageNumber: 0,
+			type: 'drawing',
+			x: 0.1,
+			y: 0.1,
+			width: 0.1,
+			height: 0.1,
+			color: '#1e88e5',
+			strokeWidth: 2,
+			opacity: 1,
+			data: {
+				points: [
+					{ x: 0.1, y: 0.1 },
+					{ x: 0.2, y: 0.2 },
+				],
+			},
+		}
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				pageNumber: 1,
+				visible: false,
+				editable: false,
+				stylusQuickDraw: true,
+				annotations: [hiddenAnn],
+			},
+			attachTo: document.body,
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]').element
+		attachRect(svg)
+
+		// Existing annotation stays hidden while visible=false
+		expect(wrapper.find('[data-ann-uuid="ann-hidden-1"]').exists()).toBe(false)
+
+		// Starting a pen stroke renders the live draft preview
+		svg.dispatchEvent(makePointerEvent('pointerdown', { pointerType: 'pen', pointerId: 15, clientX: 80, clientY: 80 }))
+		svg.dispatchEvent(makePointerEvent('pointermove', { pointerType: 'pen', pointerId: 15, clientX: 160, clientY: 160 }))
+		await wrapper.vm.$nextTick()
+		expect(wrapper.find('[data-ann-uuid="__draft__"]').exists()).toBe(true)
+
+		// Disabling stylusQuickDraw mid-stroke (entering Concert Mode) cancels the stroke cleanly
+		await wrapper.setProps({ stylusQuickDraw: false })
+		svg.dispatchEvent(makePointerEvent('pointerup', { pointerType: 'pen', pointerId: 15, clientX: 160, clientY: 160 }))
+		await wrapper.vm.$nextTick()
+
+		expect(wrapper.find('[data-ann-uuid="__draft__"]').exists()).toBe(false)
+		expect(wrapper.emitted('create-annotation')).toBeUndefined()
+		wrapper.unmount()
+	})
 })
