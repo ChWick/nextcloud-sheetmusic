@@ -1,4 +1,4 @@
-import { onUnmounted, ref } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 
 /**
  * Manages auto-hiding HUD visibility with inactivity timeout and pause/resume guards.
@@ -57,6 +57,14 @@ export function useHudAutoHide(
 			scheduleHudAutoHide()
 		}
 	}
+
+	watch(isBlocked, (blocked, wasBlocked) => {
+		if (blocked) {
+			clearHudTimer()
+		} else if (wasBlocked && isHudVisible.value) {
+			scheduleHudAutoHide()
+		}
+	})
 
 	onUnmounted(() => {
 		clearHudTimer()
