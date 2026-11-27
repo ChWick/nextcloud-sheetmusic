@@ -51,4 +51,28 @@ describe('ConcertModeUnlockBadge (real timers, no mocks)', () => {
 
 		expect(wrapper.emitted('unlock')).toBeUndefined()
 	})
+
+	it('ignores secondary mouse button and supports keyboard hold-to-unlock', async () => {
+		const wrapper = mount(ConcertModeUnlockBadge, {
+			props: {
+				holdMs: 80,
+			},
+		})
+
+		const btn = wrapper.find('[data-test="concert-mode-unlock-button"]')
+
+		// Right-click (button: 2) should not start a hold or unlock
+		await btn.trigger('pointerdown', { pointerType: 'mouse', button: 2 })
+		await waitMs(110)
+		await btn.trigger('pointerup', { pointerType: 'mouse', button: 2 })
+		expect(wrapper.emitted('unlock')).toBeUndefined()
+
+		// Keyboard Space hold unlocks cleanly
+		await btn.trigger('keydown', { key: ' ' })
+		await waitMs(110)
+		await btn.trigger('keyup', { key: ' ' })
+		await wrapper.vm.$nextTick()
+
+		expect(wrapper.emitted('unlock')).toHaveLength(1)
+	})
 })

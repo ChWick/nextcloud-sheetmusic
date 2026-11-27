@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 
@@ -14,6 +14,7 @@ const emit = defineEmits<{
 	unlock: []
 }>()
 
+const effectiveHoldMs = computed(() => Math.max(50, props.holdMs))
 const isHolding = ref(false)
 const showHint = ref(false)
 let holdTimer: ReturnType<typeof setTimeout> | null = null
@@ -43,7 +44,7 @@ function flashHint() {
 	}, 1800)
 }
 
-function onPointerDown() {
+function startHold() {
 	unlockedOnThisPress = false
 	isHolding.value = true
 	clearHoldTimer()
@@ -52,16 +53,43 @@ function onPointerDown() {
 		isHolding.value = false
 		unlockedOnThisPress = true
 		emit('unlock')
-	}, Math.max(50, props.holdMs))
+	}, effectiveHoldMs.value)
 }
 
-function onPointerEnd(wasRelease: boolean) {
+function endHold(wasRelease: boolean) {
 	const wasHolding = isHolding.value
 	clearHoldTimer()
 	isHolding.value = false
 	if (wasRelease && wasHolding && !unlockedOnThisPress) {
 		flashHint()
 	}
+}
+
+function onPointerDown(event: PointerEvent) {
+	if (event.pointerType === 'mouse' && event.button !== 0) {
+		return
+	}
+	startHold()
+}
+
+function onKeyDown(event: KeyboardEvent) {
+	if (event.key !== 'Enter' && event.key !== ' ') {
+		return
+	}
+	event.preventDefault()
+	event.stopPropagation()
+	if (!event.repeat && !isHolding.value) {
+		startHold()
+	}
+}
+
+function onKeyUp(event: KeyboardEvent) {
+	if (event.key !== 'Enter' && event.key !== ' ') {
+		return
+	}
+	event.preventDefault()
+	event.stopPropagation()
+	endHold(true)
 }
 
 onUnmounted(() => {
@@ -78,14 +106,17 @@ onUnmounted(() => {
 		<button
 			type="button"
 			:class="[$style.badge, isHolding && $style.holding]"
-			:style="{ '--concert-hold-ms': `${holdMs}ms` }"
+			:style="{ '--concert-hold-ms': `${effectiveHoldMs}ms` }"
 			:aria-label="t('sheetmusic', 'Hold to unlock Concert Mode')"
 			:title="t('sheetmusic', 'Hold to unlock Concert Mode')"
 			data-test="concert-mode-unlock-button"
 			@pointerdown.stop="onPointerDown"
-			@pointerup.stop="onPointerEnd(true)"
-			@pointercancel.stop="onPointerEnd(false)"
-			@pointerleave.stop="onPointerEnd(false)"
+			@pointerup.stop="endHold(true)"
+			@pointercancel.stop="endHold(false)"
+			@pointerleave.stop="endHold(false)"
+			@keydown="onKeyDown"
+			@keyup="onKeyUp"
+			@blur="endHold(false)"
 			@click.stop.prevent>
 			<span :class="$style.fill" aria-hidden="true" />
 			<LockOutlineIcon :size="18" :class="$style.icon" />
