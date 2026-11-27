@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
 	open?: boolean
 	size?: 'small' | 'normal'
 	toggleTestId?: string
+	longPressMs?: number
 }>(), {
 	scoreColorMode: 'normal',
 	scoreBrightness: SCORE_BRIGHTNESS_MAX,
@@ -25,6 +26,7 @@ const props = withDefaults(defineProps<{
 	open: undefined,
 	size: 'normal',
 	toggleTestId: 'night-mode-toggle',
+	longPressMs: 450,
 })
 
 const emit = defineEmits<{
@@ -56,7 +58,7 @@ const iconSize = computed(() => (props.size === 'small' ? 18 : 20))
 		:main-test-id="toggleTestId"
 		:menu-label="t('sheetmusic', 'Score appearance options')"
 		:menu-test-id="`${toggleTestId}-menu`"
-		:long-press-ms="450"
+		:long-press-ms="longPressMs"
 		@click="emit('toggle-night-mode')"
 		@update:open="emit('update:open', $event)">
 		<template #icon>

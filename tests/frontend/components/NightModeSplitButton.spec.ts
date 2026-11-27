@@ -1,12 +1,12 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import NightModeSplitButton from '../../../src/components/song-viewer/NightModeSplitButton.vue'
 
-describe('NightModeSplitButton', () => {
-	afterEach(() => {
-		vi.useRealTimers()
-	})
+function waitMs(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
+describe('NightModeSplitButton', () => {
 	it('toggles night mode on click and opens appearance popover via side arrow', async () => {
 		const wrapper = mount(NightModeSplitButton, {
 			props: {
@@ -35,18 +35,18 @@ describe('NightModeSplitButton', () => {
 		expect(wrapper.emitted('update:scoreSepia')?.[0]).toEqual([50])
 	})
 
-	it('opens appearance popover on long press without firing toggle click', async () => {
-		vi.useFakeTimers()
+	it('opens appearance popover on real long press without firing toggle click', async () => {
 		const wrapper = mount(NightModeSplitButton, {
 			props: {
 				scoreColorMode: 'normal',
 				toggleTestId: 'test-night',
+				longPressMs: 40,
 			},
 		})
 
 		const btn = wrapper.find('[data-test="test-night"]')
 		await btn.trigger('pointerdown')
-		vi.advanceTimersByTime(500)
+		await waitMs(70)
 		await wrapper.vm.$nextTick()
 
 		expect(wrapper.find('[data-test="score-appearance-popover"]').exists()).toBe(true)
