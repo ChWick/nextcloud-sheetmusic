@@ -177,6 +177,10 @@ class SeedTestLibraryCommand extends Command {
 					createdAt: $now,
 					updatedAt: $now,
 				));
+			} elseif (($song->duration ?? 0) <= 0 || $force) {
+				$song->duration = $spec['duration'];
+				$song->updatedAt = $now;
+				$song = $this->songMapper->update($song);
 			}
 
 			$songId = (int)$song->id;

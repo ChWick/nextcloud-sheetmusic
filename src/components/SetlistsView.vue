@@ -24,7 +24,8 @@
         <SetlistDetailHeader
           :name="selectedSetlist.name"
           :item-count="selectedSetlistItems.length"
-          :total-duration-formatted="totalDurationFormatted"
+          :break-count="selectedSetlistBreaks.length"
+          :total-duration-formatted="combinedDurationFormatted"
           :can-write="canWrite"
           :offline-supported="offlineSupported"
           :is-offline="isSelectedSetlistOffline"
@@ -47,14 +48,18 @@
 
         <SetlistItemsTable
           :items="selectedSetlistItems"
+          :breaks="selectedSetlistBreaks"
           :available-songs="songs"
           :is-loading="isLoadingItems"
           :can-write="canWrite"
           @move="moveItem"
           @open-song="openItemSong"
           @update-bookmark="handleUpdateItemBookmark"
-          @remove="removeItem"
-          @add-item="openAddItemDialog" />
+          @remove="handleRemoveItem"
+          @add-item="openAddItemDialog"
+          @add-break="handleAddBreak"
+          @update-break="handleUpdateBreak"
+          @remove-break="handleRemoveBreak" />
       </template>
 
       <NotFoundState
@@ -161,6 +166,16 @@ import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
 import { useLibraryData } from '../composables/useLibraryData'
 import { useSetlistOfflineSync } from '../composables/useSetlistOfflineSync'
 import { useSetlists } from '../composables/useSetlists'
+import {
+  computeSetlistTiming,
+  DEFAULT_BREAK_MINUTES,
+  formatStageDuration,
+  loadSetlistBreaks,
+  normalizeSetlistBreaks,
+  remapBreaksOnRemove,
+  saveSetlistBreaks,
+  type SetlistBreak,
+} from '../utils/setlist-timing'
 
 const props = withDefaults(
   defineProps<{
@@ -252,6 +267,63 @@ function handleUpdateItemBookmark(item: SetlistItem, bookmarkId: number | null) 
     updateItemBookmark(item.id, bookmarkId)
   }
 }
+
+const selectedSetlistBreaks = ref<SetlistBreak[]>([])
+
+watch(
+  () => [props.selectedLibrary, selectedSetlist.value?.id] as const,
+  ([libId, setlistId]) => {
+    selectedSetlistBreaks.value = setlistId ? loadSetlistBreaks(libId, setlistId) : []
+  },
+  { immediate: true },
+)
+
+function persistBreaks(next: SetlistBreak[]) {
+  const normalized = normalizeSetlistBreaks(next, selectedSetlistItems.value.length)
+  selectedSetlistBreaks.value = normalized
+  if (selectedSetlist.value?.id) {
+    saveSetlistBreaks(props.selectedLibrary, selectedSetlist.value.id, normalized)
+  }
+}
+
+function handleAddBreak(afterIndex: number) {
+  persistBreaks([
+    ...selectedSetlistBreaks.value,
+    {
+      id: `brk-${Date.now()}-${afterIndex}`,
+      afterIndex,
+      label: t('sheetmusic', 'Intermission'),
+      durationMinutes: DEFAULT_BREAK_MINUTES,
+    },
+  ])
+}
+
+function handleUpdateBreak(updated: SetlistBreak) {
+  persistBreaks(
+    selectedSetlistBreaks.value.map((b) => (b.afterIndex === updated.afterIndex ? updated : b)),
+  )
+}
+
+function handleRemoveBreak(afterIndex: number) {
+  persistBreaks(selectedSetlistBreaks.value.filter((b) => b.afterIndex !== afterIndex))
+}
+
+async function handleRemoveItem(item: SetlistItem) {
+  const idx = selectedSetlistItems.value.findIndex((i) => i.id === item.id)
+  await removeItem(item)
+  if (idx >= 0) {
+    persistBreaks(remapBreaksOnRemove(selectedSetlistBreaks.value, idx, selectedSetlistItems.value.length))
+  }
+}
+
+const setlistTiming = computed(() =>
+  computeSetlistTiming(selectedSetlistItems.value, selectedSetlistBreaks.value),
+)
+
+const combinedDurationFormatted = computed(() => {
+  if (setlistTiming.value.totalSeconds <= 0) return totalDurationFormatted.value
+  return formatStageDuration(setlistTiming.value.totalSeconds)
+})
 
 const isPerformanceMode = ref(false)
 const performanceStartIndex = ref(0)

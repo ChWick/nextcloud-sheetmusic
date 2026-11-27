@@ -2,8 +2,9 @@
   <div :class="$style.detailHeader">
     <div :class="$style.detailTitleArea">
       <h2 :class="$style.detailTitle">{{ name }}</h2>
-      <span :class="$style.detailSubtitle">
+      <span :class="$style.detailSubtitle" data-test="setlist-timing-subtitle">
         {{ t('sheetmusic', '{count} items', { count: itemCount }, { escape: false }) }}
+        <span v-if="breakCount > 0"> • {{ t('sheetmusic', '{count} breaks', { count: breakCount }, { escape: false }) }}</span>
         <span v-if="totalDurationFormatted"> • {{ totalDurationFormatted }}</span>
       </span>
     </div>
@@ -60,6 +61,7 @@ const props = withDefaults(
   defineProps<{
     name: string
     itemCount: number
+    breakCount?: number
     totalDurationFormatted?: string | null
     canWrite?: boolean
     offlineSupported?: boolean
@@ -68,6 +70,7 @@ const props = withDefaults(
     offlineProgressText?: string
   }>(),
   {
+    breakCount: 0,
     canWrite: true,
     offlineSupported: false,
     isOffline: false,

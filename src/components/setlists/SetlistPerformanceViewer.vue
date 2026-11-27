@@ -12,6 +12,8 @@ import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplement
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
 import ConcertModeUnlockBadge from './ConcertModeUnlockBadge.vue'
 import PerformanceToolsButtons from './PerformanceToolsButtons.vue'
+import StageClockBadge from './StageClockBadge.vue'
+import { computeSetlistTiming, loadSetlistBreaks } from '../../utils/setlist-timing'
 import { deleteSongAnnotation, fetchSongAnnotations, saveSongAnnotation } from '../../api/annotations'
 import { createUuid } from '../../composables/useAnnotationEditor'
 import { useAutoScroll } from '../../composables/useAutoScroll'
@@ -124,6 +126,12 @@ const zoomChoice = ref<PerformanceZoomChoice>(initialSettings.settings.zoomChoic
 
 const metronome = useMetronome()
 const pitchPipe = usePitchPipe()
+const setlistBreaks = computed(() =>
+	props.setlistId > 0 ? loadSetlistBreaks(props.libraryId, props.setlistId) : [],
+)
+const setlistTiming = computed(() =>
+	computeSetlistTiming(props.items, setlistBreaks.value, currentIndex.value),
+)
 const autoScroll = useAutoScroll({
 	getContainer: () => previewerRef.value?.getScrollContainer?.() ?? null,
 	getSongDurationSeconds: () => currentSong.value?.duration ?? null,
@@ -693,6 +701,14 @@ onUnmounted(() => {
 				v-if="isConcertMode"
 				@unlock="exitConcertMode" />
 
+			<StageClockBadge
+				:remaining-seconds="setlistTiming.remainingSeconds"
+				:total-seconds="setlistTiming.totalSeconds"
+				:hud-visible="isHudVisible"
+				:concert-mode="isConcertMode"
+				@pause-auto-hide="pauseHudAutoHide"
+				@resume-auto-hide="resumeHudAutoHide" />
+
 			<SetlistPerformanceTopBar
 				:visible="isHudVisible && !isConcertMode"
 				:setlist-name="setlistName"
@@ -913,6 +929,7 @@ onUnmounted(() => {
 				:open="isDrawerOpen"
 				:setlist-name="setlistName"
 				:items="items"
+				:breaks="setlistBreaks"
 				:current-index="currentIndex"
 				@close="toggleDrawer"
 				@select="goToSong($event, false)" />

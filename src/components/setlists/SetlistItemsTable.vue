@@ -29,95 +29,119 @@
         </tr>
       </thead>
       <tbody>
-        <tr
+        <template
           v-for="(item, index) in items"
-          :key="item.id ?? index"
-          :class="$style.itemRow">
-          <td :class="$style.colPos">
-            <span :class="$style.posBadge">{{ index + 1 }}</span>
-          </td>
-          <td v-if="canWrite !== false" :class="$style.colOrder">
-            <div :class="$style.reorderButtons">
-              <NcButton
-                size="small"
-                :disabled="index === 0"
-                :title="t('sheetmusic', 'Move up')"
-                :aria-label="t('sheetmusic', 'Move up')"
-                @click="emit('move', index, index - 1)">
-                <template #icon>
-                  <ArrowUpIcon :size="16" />
-                </template>
-              </NcButton>
-              <NcButton
-                size="small"
-                :disabled="index === items.length - 1"
-                :title="t('sheetmusic', 'Move down')"
-                :aria-label="t('sheetmusic', 'Move down')"
-                @click="emit('move', index, index + 1)">
-                <template #icon>
-                  <ArrowDownIcon :size="16" />
-                </template>
-              </NcButton>
-            </div>
-          </td>
-          <td :class="$style.colTitle">
-            <div :class="$style.titleWrapper">
-              <button
-                type="button"
-                :class="$style.songTitleBtn"
-                :title="t('sheetmusic', 'Open in song viewer')"
-                @click="emit('open-song', item)">
-                {{ item.songTitle || t('sheetmusic', 'Untitled song') }}
-              </button>
-
-              <!-- Inline bookmark dropdown when song has bookmarks -->
-              <div
-                v-if="canWrite !== false && getSongBookmarks(item.songId).length > 0"
-                :class="[$style.inlineBookmarkPicker, item.bookmarkId ? $style.hasBookmark : $style.noBookmark]">
-                <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
-                <select
-                  :value="item.bookmarkId ?? ''"
-                  :class="$style.inlineBookmarkSelect"
-                  :title="t('sheetmusic', 'Change bookmark')"
-                  :aria-label="t('sheetmusic', 'Change bookmark for {song}', { song: item.songTitle || '' }, { escape: false })"
-                  @change="onBookmarkSelect(item, $event)">
-                  <option value="">{{ t('sheetmusic', 'Entire song') }}</option>
-                  <option
-                    v-for="bm in getSongBookmarks(item.songId)"
-                    :key="bm.id"
-                    :value="bm.id">
-                    {{ bm.name }} (p. {{ bm.pageNum }})
-                  </option>
-                </select>
+          :key="item.id ?? index">
+          <tr :class="$style.itemRow">
+            <td :class="$style.colPos">
+              <span :class="$style.posBadge">{{ index + 1 }}</span>
+            </td>
+            <td v-if="canWrite !== false" :class="$style.colOrder">
+              <div :class="$style.reorderButtons">
+                <NcButton
+                  size="small"
+                  :disabled="index === 0"
+                  :title="t('sheetmusic', 'Move up')"
+                  :aria-label="t('sheetmusic', 'Move up')"
+                  @click="emit('move', index, index - 1)">
+                  <template #icon>
+                    <ArrowUpIcon :size="16" />
+                  </template>
+                </NcButton>
+                <NcButton
+                  size="small"
+                  :disabled="index === items.length - 1"
+                  :title="t('sheetmusic', 'Move down')"
+                  :aria-label="t('sheetmusic', 'Move down')"
+                  @click="emit('move', index, index + 1)">
+                  <template #icon>
+                    <ArrowDownIcon :size="16" />
+                  </template>
+                </NcButton>
               </div>
+            </td>
+            <td :class="$style.colTitle">
+              <div :class="$style.titleWrapper">
+                <button
+                  type="button"
+                  :class="$style.songTitleBtn"
+                  :title="t('sheetmusic', 'Open in song viewer')"
+                  @click="emit('open-song', item)">
+                  {{ item.songTitle || t('sheetmusic', 'Untitled song') }}
+                </button>
 
-              <!-- Static badge fallback if availableSongs is not loaded yet and item already had bookmark -->
-              <span
-                v-else-if="item.bookmarkName"
-                :class="$style.bookmarkBadge"
-                :title="t('sheetmusic', 'Bookmark page {page}', { page: item.pageNum ?? 1 }, { escape: false })">
-                <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
-                {{ item.bookmarkName }}
-                <span v-if="item.pageNum" :class="$style.bookmarkPage"> (p. {{ item.pageNum }})</span>
-              </span>
-            </div>
-          </td>
-          <td :class="$style.colDuration">
-            {{ item.duration ? formatDuration(item.duration) : '—' }}
-          </td>
-          <td v-if="canWrite !== false" :class="$style.colActions">
-            <NcButton
-              variant="error"
-              size="small"
-              :title="t('sheetmusic', 'Remove from setlist')"
-              :aria-label="t('sheetmusic', 'Remove from setlist')"
-              @click="emit('remove', item)">
-              <template #icon>
-                <DeleteIcon :size="16" />
-              </template>
-            </NcButton>
-          </td>
-        </tr>
+                <!-- Inline bookmark dropdown when song has bookmarks -->
+                <div
+                  v-if="canWrite !== false && getSongBookmarks(item.songId).length > 0"
+                  :class="[$style.inlineBookmarkPicker, item.bookmarkId ? $style.hasBookmark : $style.noBookmark]">
+                  <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
+                  <select
+                    :value="item.bookmarkId ?? ''"
+                    :class="$style.inlineBookmarkSelect"
+                    :title="t('sheetmusic', 'Change bookmark')"
+                    :aria-label="t('sheetmusic', 'Change bookmark for {song}', { song: item.songTitle || '' }, { escape: false })"
+                    @change="onBookmarkSelect(item, $event)">
+                    <option value="">{{ t('sheetmusic', 'Entire song') }}</option>
+                    <option
+                      v-for="bm in getSongBookmarks(item.songId)"
+                      :key="bm.id"
+                      :value="bm.id">
+                      {{ bm.name }} (p. {{ bm.pageNum }})
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Static badge fallback if availableSongs is not loaded yet and item already had bookmark -->
+                <span
+                  v-else-if="item.bookmarkName"
+                  :class="$style.bookmarkBadge"
+                  :title="t('sheetmusic', 'Bookmark page {page}', { page: item.pageNum ?? 1 }, { escape: false })">
+                  <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
+                  {{ item.bookmarkName }}
+                  <span v-if="item.pageNum" :class="$style.bookmarkPage"> (p. {{ item.pageNum }})</span>
+                </span>
+              </div>
+            </td>
+            <td :class="$style.colDuration">
+              {{ item.duration ? formatDuration(item.duration) : '—' }}
+            </td>
+            <td v-if="canWrite !== false" :class="$style.colActions">
+              <div :class="$style.rowActionBtns">
+                <NcButton
+                  v-if="index < items.length - 1 && !breakAfterMap.has(index)"
+                  variant="tertiary"
+                  size="small"
+                  :title="t('sheetmusic', 'Insert intermission / break after this song')"
+                  :aria-label="t('sheetmusic', 'Insert intermission / break after this song')"
+                  :data-test="`add-break-after-${index}`"
+                  @click="emit('add-break', index)">
+                  <template #icon>
+                    <CoffeeOutlineIcon :size="16" />
+                  </template>
+                </NcButton>
+                <NcButton
+                  variant="error"
+                  size="small"
+                  :title="t('sheetmusic', 'Remove from setlist')"
+                  :aria-label="t('sheetmusic', 'Remove from setlist')"
+                  @click="emit('remove', item)">
+                  <template #icon>
+                    <DeleteIcon :size="16" />
+                  </template>
+                </NcButton>
+              </div>
+            </td>
+          </tr>
+          <SetlistBreakRow
+            v-if="breakAfterMap.has(index)"
+            :break-item="breakAfterMap.get(index)!"
+            :segment-number="(segmentByEndIndex.get(index)?.index ?? 0) + 1"
+            :segment-duration-seconds="segmentByEndIndex.get(index)?.durationSeconds ?? 0"
+            :col-span="canWrite !== false ? 5 : 3"
+            :can-write="canWrite"
+            @update="emit('update-break', $event)"
+            @remove="emit('remove-break', $event)" />
+        </template>
       </tbody>
     </table>
   </div>
@@ -130,21 +154,26 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ArrowUpIcon from 'vue-material-design-icons/ArrowUp.vue'
 import ArrowDownIcon from 'vue-material-design-icons/ArrowDown.vue'
+import CoffeeOutlineIcon from 'vue-material-design-icons/CoffeeOutline.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PlaylistPlay from 'vue-material-design-icons/PlaylistPlay.vue'
 import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline.vue'
+import SetlistBreakRow from './SetlistBreakRow.vue'
 import type { Bookmark, SetlistItem, Song } from '../../types/song'
+import { computeSetlistTiming, type SetlistBreak } from '../../utils/setlist-timing'
 import { formatDuration } from '../../utils/song-formatter'
 
 const props = withDefaults(
   defineProps<{
     items: SetlistItem[]
+    breaks?: SetlistBreak[]
     availableSongs?: Song[]
     isLoading: boolean
     canWrite?: boolean
   }>(),
   {
+    breaks: () => [],
     availableSongs: () => [],
     canWrite: true,
   },
@@ -156,7 +185,14 @@ const emit = defineEmits<{
   'update-bookmark': [item: SetlistItem, bookmarkId: number | null]
   'remove': [item: SetlistItem]
   'add-item': []
+  'add-break': [afterIndex: number]
+  'update-break': [updated: SetlistBreak]
+  'remove-break': [afterIndex: number]
 }>()
+
+const breakAfterMap = computed(() => new Map(props.breaks.map((b) => [b.afterIndex, b])))
+const timing = computed(() => computeSetlistTiming(props.items, props.breaks))
+const segmentByEndIndex = computed(() => new Map(timing.value.segments.map((s) => [s.endItemIndex, s])))
 
 const bookmarksBySongId = computed<Record<number, Bookmark[]>>(() => {
   const map: Record<number, Bookmark[]> = {}
@@ -363,7 +399,14 @@ function onBookmarkSelect(item: SetlistItem, event: Event) {
 }
 
 .colActions {
-  width: 60px;
+  width: 96px;
   text-align: end;
+}
+
+.rowActionBtns {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 </style>
