@@ -514,6 +514,8 @@ function onToggleLayerVisibility(layerId: number) {
 	}
 }
 
+const pendingQuickDeleteUuids = new Set<string>()
+
 async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) {
 	if (!canStylusQuickDraw.value || !currentSong.value) return
 	const songId = currentSong.value.id
@@ -535,6 +537,12 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 	}
 	try {
 		const saved = await saveSongAnnotation(songId, optimistic)
+		if (pendingQuickDeleteUuids.delete(optimistic.uuid)) {
+			if (saved.id) {
+				void deleteSongAnnotation(saved.id).catch(() => {})
+			}
+			return
+		}
 		if (reqIdAtStart !== annotationRequestId) return
 		annotations.value = annotations.value.map((a) => (a.uuid === optimistic.uuid ? saved : a))
 	} catch {
@@ -551,6 +559,8 @@ async function onQuickDeleteAnnotation(ann: SheetAnnotation) {
 		} catch {
 			// Ignore transient delete errors
 		}
+	} else if (ann.uuid) {
+		pendingQuickDeleteUuids.add(ann.uuid)
 	}
 }
 
