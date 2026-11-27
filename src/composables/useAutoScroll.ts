@@ -95,7 +95,12 @@ export function useAutoScroll(options: UseAutoScrollOptions) {
 			if (lastExpectedScrollTop !== null && Math.abs(el.scrollTop - lastExpectedScrollTop) > 2) {
 				subPixelRemainder = 0
 			}
-			const pxPerSec = getEffectiveSpeedPxPerSec()
+			const pxPerSec = computeAutoScrollPxPerSec(
+				mode.value,
+				speedPxPerSec.value,
+				maxScroll,
+				options.getSongDurationSeconds?.() ?? null,
+			)
 			const delta = pxPerSec * dt + subPixelRemainder
 			const wholePx = Math.floor(delta)
 			subPixelRemainder = delta - wholePx
