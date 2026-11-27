@@ -47,6 +47,11 @@ const textBgColor = computed(() =>
 		? adaptAnnotationColorForNight(props.item.style.backgroundColor, props.nightMode, 'transparent')
 		: 'transparent',
 )
+const shapeFillColor = computed(() =>
+	props.item.style?.fill && props.item.style.fill !== 'transparent'
+		? adaptAnnotationColorForNight(props.item.style.fill, props.nightMode, 'transparent')
+		: 'transparent',
+)
 const borderColor = computed(() =>
 	props.item.style?.borderColor
 		? adaptAnnotationColorForNight(props.item.style.borderColor, props.nightMode, '#000000')
@@ -181,7 +186,7 @@ const textLayout = computed(() =>
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
-				:fill="item.style?.fill || 'transparent'"
+				:fill="shapeFillColor"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-shape" />
 			<ellipse
@@ -210,7 +215,7 @@ const textLayout = computed(() =>
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
-				:fill="item.style?.fill || 'transparent'"
+				:fill="shapeFillColor"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-shape" />
 			<rect

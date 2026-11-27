@@ -14,6 +14,7 @@ import type { MusicFontId } from '../../utils/musicFont'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { generateSmoothSvgPath, getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
 import { createDefaultToolStyle } from '../../utils/annotationToolStyle'
+import { adaptAnnotationColorForNight } from '../../utils/performance-settings'
 import { useAnnotationPointerInteraction } from '../../composables/useAnnotationPointerInteraction'
 import { useStylusSettings } from '../../composables/useStylusSettings'
 import SongAnnotationItem from './SongAnnotationItem.vue'
@@ -317,7 +318,7 @@ function handleOpenLinkPicker() {
 			<path
 				v-if="handwritingPreviewPath"
 				:d="handwritingPreviewPath"
-				:stroke="toolStyle.color || '#000000'"
+				:stroke="adaptAnnotationColorForNight(toolStyle.color, nightMode, '#000000')"
 				:stroke-width="Math.max(2, toolStyle.strokeWidth || 2.5)"
 				opacity="0.72"
 				fill="none"

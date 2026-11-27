@@ -967,4 +967,57 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect((updated?.[1] as SheetAnnotation).x).toBeCloseTo(0.55, 2)
 		expect((updated?.[1] as SheetAnnotation).y).toBeCloseTo(0.5, 2)
 	})
+
+	it('adapts ink & shape fill lightness and switches highlight blend mode to screen in nightMode', () => {
+		const annotations: SheetAnnotation[] = [
+			{
+				id: 91,
+				uuid: 'night-rect',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.1,
+				width: 0.2,
+				height: 0.1,
+				style: { stroke: '#8b0000', fill: '#ffffff', strokeWidth: 2 },
+				data: { shapeType: 'rect' },
+			},
+			{
+				id: 92,
+				uuid: 'night-hl',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				type: 'highlight',
+				x: 0.3,
+				y: 0.3,
+				width: 0.2,
+				height: 0.05,
+				style: { stroke: '#ffeb3b', opacity: 0.4 },
+				data: { rect: true },
+			},
+		]
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations,
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				nightMode: true,
+			},
+		})
+
+		const shape = wrapper.find('[data-test="annotation-shape"]')
+		// White-out fill flips to dark stage #141414; dark red stroke flips to bright red
+		expect(shape.attributes('fill')).toBe('#141414')
+		expect(shape.attributes('stroke')).not.toBe('#8b0000')
+
+		const hl = wrapper.find('[data-test="annotation-drawing"]')
+		expect(hl.attributes('fill')).toBe('#ffeb3b')
+		expect(hl.attributes('style')).toContain('mix-blend-mode: screen')
+	})
 })
