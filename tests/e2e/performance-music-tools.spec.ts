@@ -139,4 +139,70 @@ test.describe('Performance Mode Metronome & Pitch Pipe', () => {
 		await expect(reopenedContainer).toHaveAttribute('data-score-brightness', '70')
 		await expect(reopenedContainer).toHaveAttribute('data-score-sepia', '60')
 	})
+
+	test('detects live pitch via microphone tuner and reacts to A4 calibration', async ({ page }) => {
+		// Provide a live 440 Hz Web Audio oscillator through getUserMedia + createMediaStreamSource
+		// so the tuner's real AnalyserNode + YIN pitch detector runs end-to-end in headless Chromium.
+		await page.evaluate(() => {
+			const win = window as unknown as { __micStopped?: boolean }
+			win.__micStopped = false
+			let activeOsc: OscillatorNode | null = null
+
+			const fakeTrack = {
+				kind: 'audio',
+				stop() {
+					win.__micStopped = true
+					try { activeOsc?.stop() } catch { /* ignore */ }
+					activeOsc = null
+				},
+			}
+			const fakeStream = {
+				getTracks: () => [fakeTrack],
+			} as unknown as MediaStream
+
+			Object.defineProperty(navigator, 'mediaDevices', {
+				configurable: true,
+				value: {
+					getUserMedia: async () => fakeStream,
+				},
+			})
+
+			const origCreate = AudioContext.prototype.createMediaStreamSource
+			AudioContext.prototype.createMediaStreamSource = function (stream: MediaStream) {
+				if (stream === fakeStream) {
+					const osc = this.createOscillator()
+					osc.type = 'sine'
+					osc.frequency.value = 440
+					osc.start()
+					activeOsc = osc
+					return osc as unknown as MediaStreamAudioSourceNode
+				}
+				return origCreate.call(this, stream)
+			}
+		})
+
+		await page.locator('[data-test="performance-pitch-pipe-button"]').click()
+		await expect(page.locator('[data-test="pitch-pipe-panel"]')).toBeVisible()
+
+		// Switch to Tuner tab and start microphone
+		await page.locator('[data-test="pitch-mode-tuner"]').click()
+		await expect(page.locator('[data-test="tuner-section"]')).toBeVisible()
+		await page.locator('[data-test="tuner-toggle-button"]').click()
+
+		// Real YIN pitch detection on 440 Hz sine wave -> A4, in tune
+		await expect(page.locator('[data-test="tuner-note"]')).toHaveText('A4', { timeout: 5000 })
+		await expect(page.locator('[data-test="tuner-section"]')).toHaveAttribute('data-tuning-status', 'in-tune')
+		await expect(page.locator('[data-test="tuner-needle"]')).toBeVisible()
+
+		// Calibrate A4 reference to 444 Hz -> 440 Hz input is now ~16 cents flat
+		await page.locator('[data-test="pitch-a4-preset-444"]').click()
+		await expect(page.locator('[data-test="tuner-cents"]')).toContainText('-')
+		await expect(page.locator('[data-test="tuner-section"]')).not.toHaveAttribute('data-tuning-status', 'in-tune')
+
+		// Stop microphone and verify track is cleanly released
+		await page.locator('[data-test="tuner-toggle-button"]').click()
+		await expect(page.locator('[data-test="tuner-note"]')).toHaveText('--')
+		const stopped = await page.evaluate(() => (window as unknown as { __micStopped?: boolean }).__micStopped)
+		expect(stopped).toBe(true)
+	})
 })

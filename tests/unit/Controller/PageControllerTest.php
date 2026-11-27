@@ -32,6 +32,7 @@ final class PageControllerTest extends TestCase {
 		self::assertSame($expectedMeta['releaseDate'] ?? '', $params['releaseDate'] ?? null);
 		self::assertSame($expectedMeta['buildDate'] ?? '', $params['buildDate'] ?? null);
 		self::assertSame('no-cache, no-store, must-revalidate', $headers['Cache-Control'] ?? null);
+		self::assertStringContainsString("microphone 'self'", $response->getFeaturePolicy()->buildPolicy());
 	}
 
 	public function testAppVersionReturnsMetadataWithNoStoreHeader(): void {

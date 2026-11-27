@@ -133,8 +133,8 @@ defineExpose({ closeOpenPopover })
 		<template #trigger="{ toggle }">
 			<NcButton
 				:variant="isPitchPipeOpen || activePitchClass !== null ? 'primary' : 'tertiary'"
-				:title="t('sheetmusic', 'Pitch pipe')"
-				:aria-label="t('sheetmusic', 'Pitch pipe')"
+				:title="t('sheetmusic', 'Pitch pipe & tuner')"
+				:aria-label="t('sheetmusic', 'Pitch pipe & tuner')"
 				data-test="performance-pitch-pipe-button"
 				@click="toggle">
 				<template #icon><MusicNoteIcon :size="20" /></template>

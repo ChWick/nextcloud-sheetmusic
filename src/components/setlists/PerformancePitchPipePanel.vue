@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import StopIcon from 'vue-material-design-icons/Stop.vue'
+import PerformanceTunerSection from './PerformanceTunerSection.vue'
 import type { PitchOctave } from '../../composables/usePitchPipe'
 import type { PitchWaveform } from '../../utils/audio-engine'
 import {
@@ -34,12 +36,32 @@ const emit = defineEmits<{
 }>()
 
 const OCTAVES: readonly PitchOctave[] = [3, 4, 5]
+const mode = ref<'pipe' | 'tuner'>('pipe')
 </script>
 
 <template>
 	<div :class="$style.panel" data-test="pitch-pipe-panel">
 		<div :class="$style.headerRow">
-			<strong :class="$style.title">{{ t('sheetmusic', 'Pitch Pipe') }}</strong>
+			<div :class="$style.segmented" role="tablist" :aria-label="t('sheetmusic', 'Pitch tool mode')">
+				<button
+					type="button"
+					role="tab"
+					:aria-selected="mode === 'pipe'"
+					:class="[$style.segBtn, mode === 'pipe' && $style.segBtnActive]"
+					data-test="pitch-mode-pipe"
+					@click="mode = 'pipe'">
+					{{ t('sheetmusic', 'Pitch Pipe') }}
+				</button>
+				<button
+					type="button"
+					role="tab"
+					:aria-selected="mode === 'tuner'"
+					:class="[$style.segBtn, mode === 'tuner' && $style.segBtnActive]"
+					data-test="pitch-mode-tuner"
+					@click="mode = 'tuner'">
+					{{ t('sheetmusic', 'Tuner') }}
+				</button>
+			</div>
 			<span
 				v-if="songKeyLabel"
 				:class="$style.songKeyBadge"
@@ -48,89 +70,96 @@ const OCTAVES: readonly PitchOctave[] = [3, 4, 5]
 			</span>
 		</div>
 
-		<!-- Active tone readout -->
-		<div :class="$style.statusRow" role="status" data-test="pitch-pipe-status">
-			<template v-if="activePitchClass !== null && activeFrequency !== null">
-				<span :class="$style.activeNote">{{ activeNoteLabel }}</span>
-				<span :class="$style.activeFreq">{{ activeFrequency.toFixed(1) }} Hz</span>
-				<NcButton
-					variant="error"
-					size="small"
-					:aria-label="t('sheetmusic', 'Stop pitch pipe')"
-					data-test="pitch-pipe-stop-button"
-					@click.stop="emit('stop')">
-					<template #icon><StopIcon :size="16" /></template>
-					{{ t('sheetmusic', 'Stop') }}
-				</NcButton>
-			</template>
-			<span v-else :class="$style.idleHint">
-				{{ t('sheetmusic', 'Tap a note to sound a reference pitch') }}
-			</span>
-		</div>
-
-		<!-- 12-note chromatic grid -->
-		<div :class="$style.noteGrid" data-test="pitch-pipe-note-grid">
-			<button
-				v-for="note in CHROMATIC_NOTES"
-				:key="note.pitchClass"
-				type="button"
-				:class="[
-					$style.noteBtn,
-					note.isAccidental && $style.noteBtnAccidental,
-					songKeyPitchClass === note.pitchClass && $style.noteBtnSongKey,
-					activePitchClass === note.pitchClass && $style.noteBtnActive,
-				]"
-				:aria-pressed="activePitchClass === note.pitchClass"
-				:aria-label="`${note.label}${octave}`"
-				:data-song-key="songKeyPitchClass === note.pitchClass ? 'true' : 'false'"
-				:data-test="`pitch-note-${note.pitchClass}`"
-				@click="emit('toggleNote', note.pitchClass)">
-				{{ note.shortLabel }}
-			</button>
-		</div>
-
-		<!-- Octave & Waveform -->
-		<div :class="$style.controlsRow">
-			<div :class="$style.controlGroup">
-				<span :class="$style.controlLabel">{{ t('sheetmusic', 'Octave') }}</span>
-				<div :class="$style.segmented">
-					<button
-						v-for="oct in OCTAVES"
-						:key="oct"
-						type="button"
-						:class="[$style.segBtn, octave === oct && $style.segBtnActive]"
-						:aria-pressed="octave === oct"
-						:data-test="`pitch-octave-${oct}`"
-						@click="emit('update:octave', oct)">
-						{{ oct }}
-					</button>
-				</div>
+		<template v-if="mode === 'pipe'">
+			<!-- Active tone readout -->
+			<div :class="$style.statusRow" role="status" data-test="pitch-pipe-status">
+				<template v-if="activePitchClass !== null && activeFrequency !== null">
+					<span :class="$style.activeNote">{{ activeNoteLabel }}</span>
+					<span :class="$style.activeFreq">{{ activeFrequency.toFixed(1) }} Hz</span>
+					<NcButton
+						variant="error"
+						size="small"
+						:aria-label="t('sheetmusic', 'Stop pitch pipe')"
+						data-test="pitch-pipe-stop-button"
+						@click.stop="emit('stop')">
+						<template #icon><StopIcon :size="16" /></template>
+						{{ t('sheetmusic', 'Stop') }}
+					</NcButton>
+				</template>
+				<span v-else :class="$style.idleHint">
+					{{ t('sheetmusic', 'Tap a note to sound a reference pitch') }}
+				</span>
 			</div>
 
-			<div :class="$style.controlGroup">
-				<span :class="$style.controlLabel">{{ t('sheetmusic', 'Tone') }}</span>
-				<div :class="$style.segmented">
-					<button
-						type="button"
-						:class="[$style.segBtn, waveform === 'triangle' && $style.segBtnActive]"
-						:aria-pressed="waveform === 'triangle'"
-						data-test="pitch-waveform-triangle"
-						@click="emit('update:waveform', 'triangle')">
-						{{ t('sheetmusic', 'Warm') }}
-					</button>
-					<button
-						type="button"
-						:class="[$style.segBtn, waveform === 'sine' && $style.segBtnActive]"
-						:aria-pressed="waveform === 'sine'"
-						data-test="pitch-waveform-sine"
-						@click="emit('update:waveform', 'sine')">
-						{{ t('sheetmusic', 'Pure') }}
-					</button>
+			<!-- 12-note chromatic grid -->
+			<div :class="$style.noteGrid" data-test="pitch-pipe-note-grid">
+				<button
+					v-for="note in CHROMATIC_NOTES"
+					:key="note.pitchClass"
+					type="button"
+					:class="[
+						$style.noteBtn,
+						note.isAccidental && $style.noteBtnAccidental,
+						songKeyPitchClass === note.pitchClass && $style.noteBtnSongKey,
+						activePitchClass === note.pitchClass && $style.noteBtnActive,
+					]"
+					:aria-pressed="activePitchClass === note.pitchClass"
+					:aria-label="`${note.label}${octave}`"
+					:data-song-key="songKeyPitchClass === note.pitchClass ? 'true' : 'false'"
+					:data-test="`pitch-note-${note.pitchClass}`"
+					@click="emit('toggleNote', note.pitchClass)">
+					{{ note.shortLabel }}
+				</button>
+			</div>
+
+			<!-- Octave & Waveform -->
+			<div :class="$style.controlsRow">
+				<div :class="$style.controlGroup">
+					<span :class="$style.controlLabel">{{ t('sheetmusic', 'Octave') }}</span>
+					<div :class="$style.segmented">
+						<button
+							v-for="oct in OCTAVES"
+							:key="oct"
+							type="button"
+							:class="[$style.segBtn, octave === oct && $style.segBtnActive]"
+							:aria-pressed="octave === oct"
+							:data-test="`pitch-octave-${oct}`"
+							@click="emit('update:octave', oct)">
+							{{ oct }}
+						</button>
+					</div>
+				</div>
+
+				<div :class="$style.controlGroup">
+					<span :class="$style.controlLabel">{{ t('sheetmusic', 'Tone') }}</span>
+					<div :class="$style.segmented">
+						<button
+							type="button"
+							:class="[$style.segBtn, waveform === 'triangle' && $style.segBtnActive]"
+							:aria-pressed="waveform === 'triangle'"
+							data-test="pitch-waveform-triangle"
+							@click="emit('update:waveform', 'triangle')">
+							{{ t('sheetmusic', 'Warm') }}
+						</button>
+						<button
+							type="button"
+							:class="[$style.segBtn, waveform === 'sine' && $style.segBtnActive]"
+							:aria-pressed="waveform === 'sine'"
+							data-test="pitch-waveform-sine"
+							@click="emit('update:waveform', 'sine')">
+							{{ t('sheetmusic', 'Pure') }}
+						</button>
+					</div>
 				</div>
 			</div>
-		</div>
+		</template>
 
-		<!-- A4 calibration -->
+		<PerformanceTunerSection
+			v-else
+			:a4-hz="a4Hz"
+			@start-listening="emit('stop')" />
+
+		<!-- A4 calibration (shared by Pitch Pipe and Tuner) -->
 		<div :class="$style.calibrationRow">
 			<span :class="$style.controlLabel">{{ t('sheetmusic', 'A4 Reference') }}</span>
 			<div :class="$style.a4Controls">
@@ -183,10 +212,6 @@ const OCTAVES: readonly PitchOctave[] = [3, 4, 5]
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-}
-
-.title {
-	font-size: 0.9rem;
 }
 
 .songKeyBadge {

@@ -16,6 +16,7 @@ use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
+use OCP\AppFramework\Http\FeaturePolicy;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -63,6 +64,9 @@ class PageController extends Controller {
 		$csp->addAllowedWorkerSrcDomain('\'self\'');
 		$csp->addAllowedWorkerSrcDomain('blob:');
 		$response->setContentSecurityPolicy($csp);
+		$featurePolicy = new FeaturePolicy();
+		$featurePolicy->addAllowedMicrophoneDomain('\'self\'');
+		$response->setFeaturePolicy($featurePolicy);
 
 		return $response;
 	}
