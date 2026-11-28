@@ -23,6 +23,9 @@ export function getInitialDoubleSpread(totalPages: number): DoubleSpread {
 /**
  * Returns the exact final spread reached by stepping forward to the end of a document
  * under the given turn mode, preserving slot parity and interleaved next-song pairing.
+ *
+ * @param totalPages Total logical pages (including any interleaved next-song slot)
+ * @param mode Active double-page turn mode
  */
 export function getLastDoubleSpread(
 	totalPages: number,
@@ -44,6 +47,9 @@ export function getLastDoubleSpread(
 /**
  * Returns the opening spread of a song whose page 1 was already displayed on the right
  * slot of the previous song's interleaved spread, keeping page 1 stationary in half-page mode.
+ *
+ * @param totalPages Total logical pages (including any interleaved next-song slot)
+ * @param mode Active double-page turn mode
  */
 export function getInterleavedStartDoubleSpread(
 	totalPages: number,

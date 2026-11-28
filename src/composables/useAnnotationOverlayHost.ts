@@ -45,6 +45,8 @@ export interface UseAnnotationOverlayHostOptions {
 /**
  * Dynamically mounts, refreshes, and unmounts `SongAnnotationOverlay` instances
  * onto PDF page placeholders inside `FilePreviewer`.
+ *
+ * @param opts Reactive overlay host configuration and callbacks
  */
 export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) {
 	const appContext = getCurrentInstance()?.appContext ?? null

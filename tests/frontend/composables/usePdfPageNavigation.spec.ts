@@ -175,4 +175,26 @@ describe('usePdfPageNavigation', () => {
 		// Going back from Song 2 [1, 2] opens even-page Song 1 at [3, 2] (Song 2 p.1 stays on the left)
 		expect(getLastDoubleSpread(navEven.effectiveDoubleTotalPages.value, 'half')).toEqual([3, 2])
 	})
+
+	it('computes exact final and interleaved-start spreads across spread, step, and half modes', () => {
+		expect(getLastDoubleSpread(1, 'half')).toEqual([1, null])
+		expect(getLastDoubleSpread(2, 'half')).toEqual([1, 2])
+		expect(getLastDoubleSpread(3, 'half')).toEqual([3, 2])
+		expect(getLastDoubleSpread(4, 'half')).toEqual([3, 4])
+		expect(getLastDoubleSpread(5, 'half')).toEqual([5, 4])
+
+		expect(getLastDoubleSpread(2, 'step')).toEqual([1, 2])
+		expect(getLastDoubleSpread(3, 'step')).toEqual([2, 3])
+		expect(getLastDoubleSpread(4, 'step')).toEqual([3, 4])
+
+		expect(getLastDoubleSpread(2, 'spread')).toEqual([1, 2])
+		expect(getLastDoubleSpread(3, 'spread')).toEqual([3, null])
+		expect(getLastDoubleSpread(4, 'spread')).toEqual([3, 4])
+
+		expect(getInterleavedStartDoubleSpread(1, 'half')).toEqual([1, null])
+		expect(getInterleavedStartDoubleSpread(2, 'half')).toEqual([2, 1])
+		expect(getInterleavedStartDoubleSpread(2, 'spread')).toEqual([2, null])
+		expect(getInterleavedStartDoubleSpread(3, 'spread')).toEqual([2, 3])
+		expect(getInterleavedStartDoubleSpread(3, 'step')).toEqual([1, 2])
+	})
 })

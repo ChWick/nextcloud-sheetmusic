@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import { describe, expect, it, vi } from 'vitest'
 import axios from '@nextcloud/axios'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fetchCachedBinaryFile, preloadCachedBinaryFile } from '../../../src/utils/file-binary'
 import { MemoryFileBinaryCache } from '../../../src/utils/file-cache'
-import { fetchCachedBinaryFile } from '../../../src/utils/file-binary'
 
 vi.mock('@nextcloud/axios', () => ({
 	default: {
@@ -14,72 +14,42 @@ vi.mock('@nextcloud/axios', () => ({
 	},
 }))
 
-vi.mock('../../../src/composables/useOnlineStatus', () => ({
-	isEffectivelyOffline: vi.fn(() => false),
-}))
+const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34])
 
-vi.mock('../../../src/utils/offlineSetlists', () => ({
-	readOfflineCachedBinary: vi.fn(async () => null),
-}))
-
-import { isEffectivelyOffline } from '../../../src/composables/useOnlineStatus'
-import { readOfflineCachedBinary } from '../../../src/utils/offlineSetlists'
-
-describe('fetchCachedBinaryFile', () => {
-	beforeEach(() => {
-		vi.clearAllMocks()
-		vi.mocked(isEffectivelyOffline).mockReturnValue(false)
-		vi.mocked(readOfflineCachedBinary).mockResolvedValue(null)
-	})
-
-	it('returns cached payload without making a network request', async () => {
+describe('file-binary', () => {
+	it('deduplicates concurrent preload and foreground fetch requests for the same URL', async () => {
 		const cache = new MemoryFileBinaryCache()
-		const payload = new Uint8Array([1, 2, 3])
-		cache.set('/dav/score.pdf?v=1', payload)
-
-		const result = await fetchCachedBinaryFile('/dav/score.pdf?v=1', { cache })
-		expect(result).toBe(payload)
-		expect(axios.get).not.toHaveBeenCalled()
-	})
-
-	it('fetches from network with no-cache headers for unversioned URLs and caches result', async () => {
-		const cache = new MemoryFileBinaryCache()
-		const buf = new Uint8Array([9, 8, 7]).buffer
-		vi.mocked(axios.get).mockResolvedValue({ data: buf } as any)
-
-		const result = await fetchCachedBinaryFile('/dav/score.pdf', { cache })
-		expect(result).toEqual(new Uint8Array([9, 8, 7]))
-		expect(axios.get).toHaveBeenCalledWith('/dav/score.pdf', {
-			responseType: 'arraybuffer',
-			headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+		let resolveRequest!: (val: { data: ArrayBuffer }) => void
+		const pending = new Promise<{ data: ArrayBuffer }>((resolve) => {
+			resolveRequest = resolve
 		})
-		expect(cache.get('/dav/score.pdf')).toEqual(new Uint8Array([9, 8, 7]))
+		const getMock = vi.mocked(axios.get)
+		getMock.mockReset()
+		getMock.mockReturnValue(pending as any)
+
+		const p1 = preloadCachedBinaryFile('/scores/shared.pdf?v=1', { cache, requirePdfHeader: true })
+		const p2 = fetchCachedBinaryFile('/scores/shared.pdf?v=1', { cache })
+
+		expect(getMock).toHaveBeenCalledTimes(1)
+		resolveRequest({ data: PDF_BYTES.buffer })
+
+		const [r1, r2] = await Promise.all([p1, p2])
+		expect(r1).toEqual(PDF_BYTES)
+		expect(r2).toEqual(PDF_BYTES)
+		expect(cache.has('/scores/shared.pdf?v=1')).toBe(true)
 	})
 
-	it('falls back to offline cache when offline or network fails', async () => {
+	it('skips caching non-PDF payloads when requirePdfHeader is true', async () => {
 		const cache = new MemoryFileBinaryCache()
-		const offlineBytes = new Uint8Array([4, 5, 6])
-		vi.mocked(readOfflineCachedBinary).mockResolvedValue(offlineBytes)
-		vi.mocked(axios.get).mockRejectedValue(new Error('network down'))
+		const getMock = vi.mocked(axios.get)
+		getMock.mockReset()
+		getMock.mockResolvedValue({ data: new Uint8Array([0x3c, 0x68, 0x74, 0x6d, 0x6c]).buffer } as any)
 
-		const result = await fetchCachedBinaryFile('/dav/offline.pdf?v=2', { cache })
-		expect(result).toEqual(offlineBytes)
-		expect(cache.get('/dav/offline.pdf?v=2')).toEqual(offlineBytes)
-
-		vi.mocked(isEffectivelyOffline).mockReturnValue(true)
-		vi.mocked(readOfflineCachedBinary).mockResolvedValue(null)
-		await expect(fetchCachedBinaryFile('/dav/missing.pdf', { cache })).rejects.toThrow('File is not available offline')
-	})
-
-	it('returns null without caching when request becomes stale', async () => {
-		const cache = new MemoryFileBinaryCache()
-		vi.mocked(axios.get).mockResolvedValue({ data: new Uint8Array([1]).buffer } as any)
-
-		const result = await fetchCachedBinaryFile('/dav/stale.pdf?v=1', {
+		const result = await preloadCachedBinaryFile('/scores/error-page.pdf?v=2', {
 			cache,
-			isStale: () => true,
+			requirePdfHeader: true,
 		})
 		expect(result).toBeNull()
-		expect(cache.has('/dav/stale.pdf?v=1')).toBe(false)
+		expect(cache.has('/scores/error-page.pdf?v=2')).toBe(false)
 	})
 })

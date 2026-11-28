@@ -11,6 +11,9 @@ import { readOfflineCachedBinary } from './offlineSetlists'
 
 /**
  * Fetch fresh, uncached binary bytes for a file (used before modifying or merging PDFs).
+ *
+ * @param filePath Base file URL
+ * @param versionToken Optional version token appended for cache busting
  */
 export async function fetchUncachedBinaryFile(
 	filePath: string,
@@ -66,6 +69,11 @@ function requestBinaryOverNetwork(cacheKey: string): Promise<Uint8Array> {
 /**
  * Best-effort background preload of a binary file into the in-memory cache.
  * Shares any in-flight request with `fetchCachedBinaryFile` to avoid duplicate downloads.
+ *
+ * @param cacheKey File URL / cache key
+ * @param options Preload options
+ * @param options.cache Binary cache instance (defaults to `defaultFileBinaryCache`)
+ * @param options.requirePdfHeader Require `%PDF` header bytes before caching
  */
 export async function preloadCachedBinaryFile(
 	cacheKey: string,
@@ -107,6 +115,11 @@ export async function preloadCachedBinaryFile(
  * Fetch a binary file payload with in-memory LRU caching, in-flight request
  * deduplication, and offline Cache API fallback.
  * Returns `null` if `isStale()` becomes true while awaiting async operations.
+ *
+ * @param cacheKey File URL / cache key
+ * @param options Fetch options
+ * @param options.cache Binary cache instance (defaults to `defaultFileBinaryCache`)
+ * @param options.isStale Callback returning true when the caller no longer needs the result
  */
 export async function fetchCachedBinaryFile(
 	cacheKey: string,

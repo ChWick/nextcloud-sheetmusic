@@ -323,10 +323,7 @@ function buildVersionedPath(file: SongFile | null): string {
 }
 
 const currentFile = computed(() => pickPrimaryFile(currentSong.value, isSingleSongMode.value ? props.preferredFileId : undefined))
-const currentFileId = computed(() => Number(
-	currentFile.value?.fileId ?? currentFile.value?.id
-	?? currentSong.value?.files?.[0]?.fileId ?? currentSong.value?.files?.[0]?.id ?? 0,
-))
+const currentFileId = computed(() => getSongPrimaryFileId(currentSong.value, currentFile.value))
 const canStylusQuickDraw = computed(() =>
 	!isConcertMode.value && Boolean(currentSong.value) && currentFileId.value > 0 && props.libraryId > 0,
 )

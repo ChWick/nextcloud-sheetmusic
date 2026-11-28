@@ -3,7 +3,8 @@ import { computed, nextTick, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas } from '../utils/pdfjs'
+import { cleanupPdfJsPage, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas } from '../utils/pdfjs'
+import { createPdfDocCache, scheduleIdleTask } from '../utils/pdf-doc-cache'
 import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import ArrowULeftTopIcon from 'vue-material-design-icons/ArrowULeftTop.vue'
@@ -168,15 +169,13 @@ const isTransitionLoading = ref(false)
 const errorMessage = ref('')
 let currentLoadId = 0
 let currentRenderId = 0
-let activeLoadedFilePath = ''
 let renderedFilePath = ''
 let transitionSpinnerTimer: ReturnType<typeof setTimeout> | null = null
 let nextPdfPrewarmCancel: (() => void) | null = null
 let isUnmounted = false
 
 const TRANSITION_SPINNER_DELAY_MS = 180
-const MAX_CACHED_PDF_DOCS = 3
-const pdfDocCache = new Map<string, any>()
+const pdfDocCache = createPdfDocCache(3)
 
 const loadedPdf = shallowRef<any>(null)
 const totalPages = ref(1)
@@ -198,43 +197,8 @@ function cancelNextPdfPrewarm() {
 	}
 }
 
-function getCachedPdfDoc(path: string): any | null {
-	const existing = pdfDocCache.get(path)
-	if (!existing) return null
-	// Refresh LRU order
-	pdfDocCache.delete(path)
-	pdfDocCache.set(path, existing)
-	return existing
-}
-
 function cachePdfDoc(path: string, doc: any) {
-	if (!path || !doc) return
-	if (isUnmounted) {
-		void destroyPdfJsDocument(doc)
-		return
-	}
-	const prev = pdfDocCache.get(path)
-	if (prev && prev !== doc && prev !== loadedPdf.value) {
-		void destroyPdfJsDocument(prev)
-	}
-	pdfDocCache.delete(path)
-	pdfDocCache.set(path, doc)
-
-	while (pdfDocCache.size > MAX_CACHED_PDF_DOCS) {
-		let evictedKey: string | null = null
-		for (const [key, candidate] of pdfDocCache.entries()) {
-			if (candidate !== loadedPdf.value && key !== props.filePath && key !== props.nextFilePath) {
-				evictedKey = key
-				break
-			}
-		}
-		if (!evictedKey) break
-		const evictedDoc = pdfDocCache.get(evictedKey)
-		pdfDocCache.delete(evictedKey)
-		if (evictedDoc && evictedDoc !== loadedPdf.value) {
-			void destroyPdfJsDocument(evictedDoc)
-		}
-	}
+	pdfDocCache.set(path, doc, [props.filePath, props.nextFilePath])
 }
 
 function scheduleNextPdfPrewarm() {
@@ -243,7 +207,7 @@ function scheduleNextPdfPrewarm() {
 	if (!nextPath || !checkIsPdfFile(nextPath.split('?')[0].toLowerCase()) || pdfDocCache.has(nextPath)) {
 		return
 	}
-	const runPrewarm = () => {
+	nextPdfPrewarmCancel = scheduleIdleTask(() => {
 		nextPdfPrewarmCancel = null
 		void (async () => {
 			if (isUnmounted || props.nextFilePath !== nextPath || pdfDocCache.has(nextPath)) return
@@ -254,23 +218,12 @@ function scheduleNextPdfPrewarm() {
 			if (!bytes || isUnmounted || props.nextFilePath !== nextPath || pdfDocCache.has(nextPath)) return
 			try {
 				const doc = await loadPdfJsDocument(bytes.slice())
-				if (isUnmounted) {
-					void destroyPdfJsDocument(doc)
-					return
-				}
 				cachePdfDoc(nextPath, doc)
 			} catch {
 				// Best-effort background pre-warm
 			}
 		})()
-	}
-	if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-		const handle = (window as any).requestIdleCallback(runPrewarm, { timeout: 500 })
-		nextPdfPrewarmCancel = () => (window as any).cancelIdleCallback?.(handle)
-	} else {
-		const handle = setTimeout(runPrewarm, 120)
-		nextPdfPrewarmCancel = () => clearTimeout(handle)
-	}
+	})
 }
 
 const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
@@ -544,7 +497,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 
 	async function getNextPdfDocument(): Promise<any | null> {
 		if (!props.nextFilePath) return null
-		const cached = getCachedPdfDoc(props.nextFilePath)
+		const cached = pdfDocCache.get(props.nextFilePath)
 		if (cached) {
 			return cached
 		}
@@ -813,13 +766,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 					}
 				})()
 			}
-			if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-				const handle = (window as any).requestIdleCallback(runPrefetch, { timeout: 600 })
-				idlePrefetchCancel = () => (window as any).cancelIdleCallback?.(handle)
-			} else {
-				const handle = setTimeout(runPrefetch, 150)
-				idlePrefetchCancel = () => clearTimeout(handle)
-			}
+			idlePrefetchCancel = scheduleIdleTask(runPrefetch, { idleTimeout: 600, fallbackDelay: 150 })
 		}
 	}
 }
@@ -860,7 +807,6 @@ async function loadAndRenderFile() {
 
 	if (!preservePreviousPdfStage) {
 		errorMessage.value = ''
-		activeLoadedFilePath = ''
 		loadedPdf.value = null
 		totalPages.value = 1
 		currentPage.value = 1
@@ -940,7 +886,7 @@ async function loadAndRenderFile() {
 		}
 
 		const cache = props.binaryCache ?? defaultFileBinaryCache
-		let pdf = getCachedPdfDoc(targetFilePath)
+		let pdf = pdfDocCache.get(targetFilePath)
 		let binaryData: Uint8Array | null = cache.get(targetFilePath)
 
 		if (!pdf) {
@@ -959,7 +905,6 @@ async function loadAndRenderFile() {
 		rotation.value = 0
 		pageResolutions.value = []
 		loadedPdf.value = pdf
-		activeLoadedFilePath = targetFilePath
 		const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
 		totalPages.value = ordered.length
 
@@ -1016,7 +961,6 @@ async function loadAndRenderFile() {
 		if (loadId === currentLoadId) {
 			if (preservePreviousPdfStage) {
 				loadedPdf.value = null
-				activeLoadedFilePath = ''
 				clearRenderedStages()
 			}
 			const status = error?.response?.status ?? error?.status
@@ -1056,17 +1000,7 @@ onUnmounted(() => {
 	unmountAnnotationOverlays()
 	cleanupObserver()
 	releaseChildCanvases(pdfStage.value)
-	const destroyed = new Set<any>()
-	for (const doc of pdfDocCache.values()) {
-		if (doc && !destroyed.has(doc)) {
-			destroyed.add(doc)
-			void destroyPdfJsDocument(doc)
-		}
-	}
-	pdfDocCache.clear()
-	if (loadedPdf.value && !destroyed.has(loadedPdf.value)) {
-		void destroyPdfJsDocument(loadedPdf.value)
-	}
+	pdfDocCache.destroyAll(loadedPdf.value)
 	loadedPdf.value = null
 })
 
@@ -1157,7 +1091,7 @@ watch(
 watch(
 	() => props.nextFilePath,
 	() => {
-		if (loadedPdf.value && activeLoadedFilePath === props.filePath) {
+		if (loadedPdf.value && renderedFilePath === props.filePath) {
 			scheduleNextPdfPrewarm()
 		}
 	},
