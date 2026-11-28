@@ -20,6 +20,48 @@ export function getInitialDoubleSpread(totalPages: number): DoubleSpread {
 	return [1, 2]
 }
 
+/**
+ * Returns the exact final spread reached by stepping forward to the end of a document
+ * under the given turn mode, preserving slot parity and interleaved next-song pairing.
+ */
+export function getLastDoubleSpread(
+	totalPages: number,
+	mode: DoublePageTurnMode,
+): DoubleSpread {
+	const total = Math.max(1, totalPages)
+	if (total === 1) {
+		return [1, null]
+	}
+	if (mode === 'step') {
+		return [total - 1, total]
+	}
+	if (mode === 'half') {
+		return total % 2 === 0 ? [total - 1, total] : [total, total - 1]
+	}
+	return total % 2 === 0 ? [total - 1, total] : [total, null]
+}
+
+/**
+ * Returns the opening spread of a song whose page 1 was already displayed on the right
+ * slot of the previous song's interleaved spread, keeping page 1 stationary in half-page mode.
+ */
+export function getInterleavedStartDoubleSpread(
+	totalPages: number,
+	mode: DoublePageTurnMode,
+): DoubleSpread {
+	const total = Math.max(1, totalPages)
+	if (total <= 1) {
+		return [1, null]
+	}
+	if (mode === 'half') {
+		return [2, 1]
+	}
+	if (mode === 'spread') {
+		return [2, total >= 3 ? 3 : null]
+	}
+	return [1, 2]
+}
+
 export function getDoubleSpreadForPage(
 	page: number,
 	totalPages: number,

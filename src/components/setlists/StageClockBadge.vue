@@ -80,7 +80,7 @@ function onBadgeClick(toggle: () => void) {
 
 <template>
 	<div
-		:class="[$style.stageClockWrap, hudVisible && !concertMode && $style.belowTopBar]"
+		:class="[$style.stageClockWrap, (hudVisible || concertMode) && $style.belowTopBar]"
 		data-test="stage-clock-wrap">
 		<ViewportPopover
 			v-model:open="isPopoverOpen"

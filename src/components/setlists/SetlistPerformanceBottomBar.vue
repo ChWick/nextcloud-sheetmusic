@@ -117,6 +117,13 @@ const selectedLayoutOption = computed<LayoutOption>({
 		}
 	},
 })
+
+function onLayoutSelectClose() {
+	emit('resumeAutoHide')
+	if (document.activeElement instanceof HTMLInputElement) {
+		document.activeElement.blur()
+	}
+}
 const turnModeSelectorRef = ref<InstanceType<typeof DoublePageTurnModeSelector> | null>(null)
 
 watch(() => props.visible, (visible) => {
@@ -211,7 +218,7 @@ function onTurnModeMenuOpenChange(open: boolean) {
 				:class="$style.layoutSelect"
 				data-test="performance-layout-select"
 				@open="emit('pauseAutoHide')"
-				@close="emit('resumeAutoHide')" />
+				@close="onLayoutSelectClose" />
 
 			<DoublePageTurnModeSelector
 				v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"

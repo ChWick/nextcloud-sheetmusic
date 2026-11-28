@@ -51,16 +51,20 @@ describe('usePerformanceStageInput', () => {
 		wrapper.unmount()
 	})
 
-	it('toggles HUD anywhere on click in scroll mode', () => {
+	it('routes tap zones in scroll mode when auto-scroll does not intercept', () => {
 		const { wrapper, api, onNextPage, onPrevPage, onToggleHud } = setupHarness(() => true)
 		const mockEl = {
-			getBoundingClientRect: () => ({ left: 0, width: 400 }),
+			getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }),
 		} as unknown as HTMLElement
 
-		api.onStageClick({ currentTarget: mockEl, clientX: 50 } as unknown as MouseEvent)
-		expect(onPrevPage).not.toHaveBeenCalled()
-		expect(onNextPage).not.toHaveBeenCalled()
+		api.onStageClick({ currentTarget: mockEl, clientX: 50, clientY: 200 } as unknown as MouseEvent)
+		expect(onPrevPage).toHaveBeenCalledTimes(1)
+
+		api.onStageClick({ currentTarget: mockEl, clientX: 200, clientY: 200 } as unknown as MouseEvent)
 		expect(onToggleHud).toHaveBeenCalledTimes(1)
+
+		api.onStageClick({ currentTarget: mockEl, clientX: 350, clientY: 200 } as unknown as MouseEvent)
+		expect(onNextPage).toHaveBeenCalledTimes(1)
 
 		wrapper.unmount()
 	})

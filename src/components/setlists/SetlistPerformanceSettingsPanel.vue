@@ -3,12 +3,17 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ScoreAppearanceControls from '../song-viewer/ScoreAppearanceControls.vue'
+import StageInputMappingControls from './StageInputMappingControls.vue'
 import {
 	PERFORMANCE_BACKGROUND_PRESETS,
 	SCORE_BRIGHTNESS_MAX,
 	SCORE_SEPIA_MIN,
 	type ScoreColorMode,
 } from '../../utils/performance-settings'
+import {
+	DEFAULT_STAGE_INPUT_MAPPING,
+	type StageInputMapping,
+} from '../../utils/stage-input-mapping'
 
 withDefaults(defineProps<{
 	open: boolean
@@ -20,6 +25,7 @@ withDefaults(defineProps<{
 	scoreColorMode?: ScoreColorMode
 	scoreBrightness?: number
 	scoreSepia?: number
+	stageInputMapping?: StageInputMapping
 }>(), {
 	setlistName: '',
 	showSetlistScope: true,
@@ -28,6 +34,7 @@ withDefaults(defineProps<{
 	scoreColorMode: 'normal',
 	scoreBrightness: SCORE_BRIGHTNESS_MAX,
 	scoreSepia: SCORE_SEPIA_MIN,
+	stageInputMapping: () => ({ ...DEFAULT_STAGE_INPUT_MAPPING }),
 })
 
 const emit = defineEmits<{
@@ -38,6 +45,7 @@ const emit = defineEmits<{
 	'update:scoreColorMode': [mode: ScoreColorMode]
 	'update:scoreBrightness': [brightness: number]
 	'update:scoreSepia': [sepia: number]
+	'update:stageInputMapping': [mapping: StageInputMapping]
 	saveAsLibraryDefault: []
 }>()
 </script>
@@ -115,6 +123,14 @@ const emit = defineEmits<{
 				</button>
 			</section>
 
+			<!-- Input: Tap Zones & Pedal / Keyboard Mapping -->
+			<section :class="$style.section">
+				<strong :class="$style.sectionTitle">{{ t('sheetmusic', 'Tap zones & pedals') }}</strong>
+				<StageInputMappingControls
+					:mapping="stageInputMapping"
+					@update:mapping="emit('update:stageInputMapping', $event)" />
+			</section>
+
 			<!-- Scope (for setlists) -->
 			<section v-if="showSetlistScope" :class="$style.section">
 				<strong :class="$style.sectionTitle">{{ t('sheetmusic', 'Settings scope') }}</strong>
@@ -189,6 +205,7 @@ const emit = defineEmits<{
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+	flex-shrink: 0;
 }
 
 .sectionTitle {

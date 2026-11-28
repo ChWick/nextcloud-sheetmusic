@@ -27,6 +27,7 @@ export interface UsePdfPageNavigationOptions {
 	initialPageLayout: PageLayoutMode | 'auto'
 	initialDoublePageTurnMode: DoublePageTurnMode
 	interleaveSongs: Ref<boolean>
+	interleavedStart?: Ref<boolean>
 	nextFilePath: Ref<string | undefined>
 	onRerender: () => void | Promise<void>
 }
@@ -42,6 +43,7 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 		initialPageLayout,
 		initialDoublePageTurnMode,
 		interleaveSongs,
+		interleavedStart,
 		nextFilePath,
 		onRerender,
 	} = options
@@ -96,21 +98,31 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 		if (!canInterleaveWithNext.value) {
 			return totalPages.value
 		}
-		if (doublePageTurnMode.value === 'step') {
+		if (doublePageTurnMode.value === 'step' || doublePageTurnMode.value === 'half') {
 			return totalPages.value + 1
 		}
-		return totalPages.value % 2 === 1 ? totalPages.value + 1 : totalPages.value
+		const parityBase = interleavedStart?.value ? Math.max(0, totalPages.value - 1) : totalPages.value
+		return parityBase % 2 === 1 ? totalPages.value + 1 : totalPages.value
 	})
 
-	const isShowingNextSongFirstPage = computed(() => {
-		return pageLayout.value === 'double'
-			&& canInterleaveWithNext.value
-			&& doubleSpread.value[1] === totalPages.value + 1
+	const nextSongInterleaveSlot = computed<'left' | 'right' | null>(() => {
+		if (pageLayout.value !== 'double' || !canInterleaveWithNext.value) {
+			return null
+		}
+		const target = totalPages.value + 1
+		if (doubleSpread.value[0] === target) return 'left'
+		if (doubleSpread.value[1] === target) return 'right'
+		return null
 	})
+
+	const isShowingNextSongFirstPage = computed(() => nextSongInterleaveSlot.value !== null)
 
 	const currentPageDisplay = computed(() => {
 		if (pageLayout.value === 'double') {
-			if (isShowingNextSongFirstPage.value) {
+			if (nextSongInterleaveSlot.value === 'left') {
+				return `→1 / ${doubleSpread.value[1] ?? ''}`
+			}
+			if (nextSongInterleaveSlot.value === 'right') {
 				return `${doubleSpread.value[0]} / →1`
 			}
 			return formatDoubleSpreadDisplay(doubleSpread.value)
@@ -121,16 +133,25 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 		return `${currentPage.value}`
 	})
 
+	function resolvePrevDoubleSpread(): DoubleSpread | null {
+		if (
+			doublePageTurnMode.value === 'spread'
+			&& interleavedStart?.value
+			&& doubleSpread.value[0] <= 2
+		) {
+			return null
+		}
+		return prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+	}
+
 	const canGoPrev = computed(() => {
-		if (pageLayout.value === 'continuous') return false
 		if (pageLayout.value === 'double') {
-			return prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value) !== null
+			return resolvePrevDoubleSpread() !== null
 		}
 		return currentPage.value > 1
 	})
 
 	const canGoNext = computed(() => {
-		if (pageLayout.value === 'continuous') return false
 		if (pageLayout.value === 'double') {
 			return nextDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value) !== null
 		}
@@ -139,10 +160,10 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 
 	function prevPage(): boolean {
 		if (pageLayout.value === 'double') {
-			const prev = prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+			const prev = resolvePrevDoubleSpread()
 			if (!prev) return false
 			doubleSpread.value = prev
-			currentPage.value = prev[0]
+			currentPage.value = Math.min(prev[0], totalPages.value)
 			onRerender()
 			return true
 		}
@@ -150,6 +171,11 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 			if (currentPage.value <= 1) return false
 			currentPage.value -= 1
 			onRerender()
+			return true
+		}
+		if (pageLayout.value === 'continuous') {
+			if (currentPage.value <= 1) return false
+			goToPage(currentPage.value - 1)
 			return true
 		}
 		return false
@@ -170,6 +196,11 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 			onRerender()
 			return true
 		}
+		if (pageLayout.value === 'continuous') {
+			if (currentPage.value >= totalPages.value) return false
+			goToPage(currentPage.value + 1)
+			return true
+		}
 		return false
 	}
 
@@ -179,7 +210,7 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 			targetPage = totalPages.value
 		}
 		currentPage.value = targetPage
-		doubleSpread.value = getDoubleSpreadForPage(targetPage, totalPages.value, doublePageTurnMode.value)
+		doubleSpread.value = getDoubleSpreadForPage(targetPage, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
 		if (pageLayout.value === 'continuous') {
 			const placeholder = (pdfContainer.value?.querySelector(`[data-page-index="${targetPage}"]`) as HTMLElement | null)
 				?? (pdfContainer.value?.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement | null)
@@ -196,7 +227,7 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 		if (pageLayout.value === mode) return
 		pageLayout.value = mode
 		if (mode === 'double') {
-			doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+			doubleSpread.value = getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
 		}
 		onRerender()
 	}
@@ -208,7 +239,7 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 			if (pageLayout.value !== detected) {
 				pageLayout.value = detected
 				if (detected === 'double') {
-					doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+					doubleSpread.value = getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
 				}
 				onRerender()
 			}
@@ -218,7 +249,7 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 	function setDoublePageTurnMode(mode: DoublePageTurnMode) {
 		if (doublePageTurnMode.value === mode) return
 		doublePageTurnMode.value = mode
-		doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, mode)
+		doubleSpread.value = getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, mode)
 		if (pageLayout.value === 'double') {
 			onRerender()
 		}
@@ -231,6 +262,7 @@ export function usePdfPageNavigation(options: UsePdfPageNavigationOptions) {
 		doubleSpread,
 		canInterleaveWithNext,
 		effectiveDoubleTotalPages,
+		nextSongInterleaveSlot,
 		isShowingNextSongFirstPage,
 		currentPageDisplay,
 		canGoPrev,

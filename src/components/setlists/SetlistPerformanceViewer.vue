@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import FilePreviewer from '../FilePreviewer.vue'
@@ -14,6 +13,12 @@ import ConcertModeUnlockBadge from './ConcertModeUnlockBadge.vue'
 import PerformanceToolsButtons from './PerformanceToolsButtons.vue'
 import StageClockBadge from './StageClockBadge.vue'
 import { computeSetlistTiming, loadSetlistBreaks } from '../../utils/setlist-timing'
+import {
+	loadStageInputMapping,
+	saveStageInputMapping,
+	type StageAction,
+	type StageInputMapping,
+} from '../../utils/stage-input-mapping'
 import { deleteSongAnnotation, fetchSongAnnotations, saveSongAnnotation } from '../../api/annotations'
 import { createUuid } from '../../composables/useAnnotationEditor'
 import { useAutoScroll } from '../../composables/useAutoScroll'
@@ -38,7 +43,7 @@ import {
 	toggleAnnotationLayerVisibility,
 } from '../../utils/annotationLayers'
 import type { SetlistFile, SetlistItem, Song, SongFile } from '../../types/song'
-import { defaultFileBinaryCache } from '../../utils/file-cache'
+import { preloadCachedBinaryFile } from '../../utils/file-binary'
 import { isPdfFile, pickPrimarySongFile } from '../../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../../utils/file-version'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
@@ -257,10 +262,23 @@ function toggleDrawer() {
 const annotations = ref<SheetAnnotation[]>([])
 const annotationLayers = ref<AnnotationLayer[]>(createDefaultAnnotationLayers())
 let annotationRequestId = 0
+const annotationsCache = new Map<string, SheetAnnotation[]>()
 
-const visibleAnnotations = computed(() =>
-	filterAndSortAnnotationsForLayers(annotations.value, annotationLayers.value),
-)
+function getAnnotationCacheKey(songId: number, fileId: number): string {
+	return `${songId}:${fileId}`
+}
+
+function getSongPrimaryFileId(song: Song | null, file: SongFile | null): number {
+	return Number(file?.fileId ?? file?.id ?? song?.files?.[0]?.fileId ?? song?.files?.[0]?.id ?? 0)
+}
+
+const visibleAnnotations = computed(() => {
+	const songId = currentSong.value?.id
+	const scoped = songId
+		? annotations.value.filter((ann) => !ann.songId || ann.songId === songId)
+		: annotations.value
+	return filterAndSortAnnotationsForLayers(scoped, annotationLayers.value)
+})
 
 const songsById = computed(() => {
 	const map = new Map<number, Song>()
@@ -362,27 +380,40 @@ const totalPages = computed(() => previewerRef.value?.totalPages ?? 1)
 const hasPrevSong = computed(() => currentIndex.value > 0)
 const hasNextSong = computed(() => currentIndex.value < props.items.length - 1)
 
-function preloadNextSong() {
-	const nextItem = props.items[currentIndex.value + 1]
-	if (!nextItem) return
-	const nextSong = songsById.value.get(nextItem.songId) ?? null
-	const nextFile = pickPrimaryFile(nextSong)
-	const nextPath = buildVersionedPath(nextFile)
-	if (!nextPath || !isPdfFile(nextPath)) return
-	if (defaultFileBinaryCache.has(nextPath)) return
-
-	axios.get(nextPath, { responseType: 'arraybuffer' })
-		.then((resp) => {
-			if (resp.data) {
-				const bytes = new Uint8Array(resp.data)
-				if (bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
-					defaultFileBinaryCache.set(nextPath, bytes)
-				}
+function preloadAdjacentSongs() {
+	const candidateIndices = [
+		currentIndex.value + 1,
+		currentIndex.value - 1,
+		currentIndex.value + 2,
+	]
+	const seenPaths = new Set<string>()
+	const seenAnnotationKeys = new Set<string>()
+	for (const idx of candidateIndices) {
+		const item = props.items[idx]
+		if (!item) continue
+		const song = songsById.value.get(item.songId) ?? null
+		const file = pickPrimaryFile(song)
+		const filePath = buildVersionedPath(file)
+		if (filePath && isPdfFile(filePath) && !seenPaths.has(filePath)) {
+			seenPaths.add(filePath)
+			void preloadCachedBinaryFile(filePath, { requirePdfHeader: true })
+		}
+		if (song && props.libraryId > 0) {
+			const fileId = getSongPrimaryFileId(song, file)
+			if (fileId > 0) {
+				void loadFileAnnotationLayers(fileId).catch(() => {})
 			}
-		})
-		.catch(() => {
-			// Ignore background preload errors
-		})
+			const cacheKey = getAnnotationCacheKey(song.id, fileId)
+			if (!annotationsCache.has(cacheKey) && !seenAnnotationKeys.has(cacheKey)) {
+				seenAnnotationKeys.add(cacheKey)
+				void fetchSongAnnotations(song.id, fileId || undefined)
+					.then((list) => {
+						annotationsCache.set(cacheKey, list)
+					})
+					.catch(() => {})
+			}
+		}
+	}
 }
 
 watch([currentSong, currentFile], async ([song]) => {
@@ -404,13 +435,18 @@ watch([currentSong, currentFile], async ([song]) => {
 		annotations.value = props.initialAnnotations
 		return
 	}
+	const cacheKey = getAnnotationCacheKey(song.id, targetFileId)
+	// Swap synchronously to cached annotations (or empty) so the previous song's
+	// annotations never flash on the newly rendered song while fetching.
+	annotations.value = annotationsCache.get(cacheKey) ?? []
 	try {
 		const list = await fetchSongAnnotations(song.id, targetFileId || undefined)
+		annotationsCache.set(cacheKey, list)
 		if (reqId === annotationRequestId) {
 			annotations.value = list
 		}
 	} catch {
-		if (reqId === annotationRequestId) {
+		if (reqId === annotationRequestId && !annotationsCache.has(cacheKey)) {
 			annotations.value = []
 		}
 	}
@@ -418,7 +454,7 @@ watch([currentSong, currentFile], async ([song]) => {
 
 watch(currentIndex, (index) => {
 	emit('update:current-index', index)
-	preloadNextSong()
+	preloadAdjacentSongs()
 }, { immediate: true })
 
 function goToSong(index: number, openAtEnd = false, skipFirstPage = false, explicitTargetPage: number | null = null) {
@@ -443,10 +479,10 @@ function onJumpToPage(payload: { itemIndex: number; page: number }) {
 }
 
 function handleNextPage() {
-	const wasInterleaved = Boolean(previewerRef.value?.isShowingNextSongFirstPage)
+	const interleaveSlot = previewerRef.value?.nextSongInterleaveSlot ?? null
 	const turned = previewerRef.value?.nextPage()
 	if (!turned && hasNextSong.value) {
-		const shouldSkipFirst = wasInterleaved
+		const shouldSkipFirst = interleaveSlot === 'right'
 			&& (doublePageTurnMode.value === 'half' || doublePageTurnMode.value === 'spread')
 		goToSong(currentIndex.value + 1, false, shouldSkipFirst)
 	}
@@ -533,7 +569,9 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 		fileId,
 		layerId: draft.layerId ?? targetLayerId,
 	}
+	const cacheKey = getAnnotationCacheKey(songId, fileId)
 	annotations.value = [...annotations.value, optimistic]
+	annotationsCache.set(cacheKey, annotations.value)
 	if (isSingleSongMode.value) {
 		emit('update:annotations', annotations.value)
 	}
@@ -551,6 +589,7 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 		}
 		if (reqIdAtStart !== annotationRequestId) return
 		annotations.value = annotations.value.map((a) => (a.uuid === optimistic.uuid ? saved : a))
+		annotationsCache.set(cacheKey, annotations.value)
 		if (isSingleSongMode.value) {
 			emit('update:annotations', annotations.value)
 		}
@@ -562,6 +601,9 @@ async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | '
 async function onQuickDeleteAnnotation(ann: SheetAnnotation) {
 	if (!canStylusQuickDraw.value) return
 	annotations.value = annotations.value.filter((a) => a.uuid !== ann.uuid)
+	if (currentSong.value) {
+		annotationsCache.set(getAnnotationCacheKey(currentSong.value.id, currentFileId.value), annotations.value)
+	}
 	if (isSingleSongMode.value) {
 		emit('update:annotations', annotations.value)
 	}
@@ -617,18 +659,48 @@ function handleFullscreenChange() {
 	isFullscreen.value = Boolean(document.fullscreenElement)
 }
 
+const stageInputMapping = ref<StageInputMapping>(loadStageInputMapping())
+
+function onUpdateStageInputMapping(next: StageInputMapping) {
+	stageInputMapping.value = next
+	saveStageInputMapping(next)
+}
+
+function handleMappedStageAction(action: StageAction) {
+	if (action === 'next-song') {
+		if (hasNextSong.value) goToSong(currentIndex.value + 1, false)
+		return
+	}
+	if (action === 'prev-song') {
+		if (hasPrevSong.value) goToSong(currentIndex.value - 1, false)
+		return
+	}
+	if (isConcertMode.value) return
+	if (action === 'toggle-metronome') {
+		metronome.toggle()
+	} else if (action === 'toggle-autoscroll') {
+		autoScroll.toggle()
+	} else if (action === 'toggle-night-mode') {
+		onToggleNightMode()
+	} else if (action === 'toggle-annotations') {
+		onToggleAnnotations()
+	}
+}
+
 const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStageInput({
 	isScrollMode: () => effectiveLayout.value === 'continuous',
 	isPanningOrPinching: () => Boolean(
 		previewerRef.value?.wasRecentlyPinching?.() || previewerRef.value?.wasRecentlyDragging?.(),
 	),
 	canPanHorizontally: () => Boolean(previewerRef.value?.canPanHorizontally?.()),
+	getInputMapping: () => stageInputMapping.value,
 	onNextPage: handleNextPage,
 	onPrevPage: handlePrevPage,
 	onToggleHud: () => {
 		if (isConcertMode.value) return
 		toggleHud()
 	},
+	onAction: handleMappedStageAction,
 	onSpace: () => {
 		if (effectiveLayout.value === 'continuous' || autoScroll.isActive.value || autoScroll.isPaused.value) {
 			autoScroll.toggle()
@@ -794,7 +866,6 @@ onUnmounted(() => {
 				@touchend.passive="onStageTouchEnd">
 				<FilePreviewer
 					v-if="currentFilePath"
-					:key="`${currentIndex}-${currentFilePath}`"
 					ref="previewerRef"
 					:file-path="currentFilePath"
 					:page-order="currentPageOrder"
@@ -812,6 +883,7 @@ onUnmounted(() => {
 					:next-target-page="nextTargetPage"
 					:next-page-order="nextPageOrder"
 					:interleave-songs="interleaveSongs"
+					:interleaved-start="skipFirstPageOnNextSong"
 					:background-color="backgroundColor"
 					:tight-crop="tightCrop"
 					:score-color-mode="scoreColorMode"
@@ -944,7 +1016,9 @@ onUnmounted(() => {
 				:score-color-mode="scoreColorMode"
 				:score-brightness="scoreBrightness"
 				:score-sepia="scoreSepia"
+				:stage-input-mapping="stageInputMapping"
 				@close="toggleSettingsPanel"
+				@update:stage-input-mapping="onUpdateStageInputMapping"
 				@update:is-setlist-override="toggleSetlistOverride"
 				@update:background-color="onUpdateBackgroundColor"
 				@update:tight-crop="onUpdateTightCrop"

@@ -29,6 +29,7 @@ export interface UseAnnotationOverlayHostOptions {
 	linkBeacon?: Ref<LinkArrivalBeacon | null>
 	pickingLinkTarget?: ComputedRef<boolean>
 	nightMode?: ComputedRef<boolean>
+	canRefresh?: () => boolean
 	onJumpToPage: (payload: LinkJumpPayload) => void
 	onStartPickLinkTarget?: (req: LinkTargetPickRequest) => void
 	onCompletePickLinkTarget?: (res: LinkTargetPickResult) => void
@@ -140,8 +141,10 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 
 	function refreshAnnotationOverlays() {
 		if (!opts.pdfContainer.value) return
+		if (opts.canRefresh && !opts.canRefresh()) return
 		const placeholders = opts.pdfContainer.value.querySelectorAll<HTMLElement>('[data-page-num]')
 		placeholders.forEach((el) => {
+			if (el.dataset.isNextFile === 'true') return
 			const pageNum = Number(el.dataset.pageNum)
 			const canvas = el.querySelector('canvas')
 			if (pageNum && canvas) {

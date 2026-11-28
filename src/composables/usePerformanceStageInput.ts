@@ -1,4 +1,11 @@
 import { onMounted, onUnmounted } from 'vue'
+import {
+	DEFAULT_STAGE_INPUT_MAPPING,
+	resolveKeyAction,
+	resolveTapZoneAction,
+	type StageAction,
+	type StageInputMapping,
+} from '../utils/stage-input-mapping'
 
 export interface PerformanceStageInputOptions {
 	isScrollMode: () => boolean
@@ -6,9 +13,13 @@ export interface PerformanceStageInputOptions {
 	isPanningOrPinching?: () => boolean
 	/** True when zoomed content can scroll horizontally; suppresses horizontal touch swipes but NOT container click zones. */
 	canPanHorizontally?: () => boolean
+	/** Optional customizable tap-zone & pedal/keyboard action mapping. */
+	getInputMapping?: () => StageInputMapping
 	onNextPage: () => void
 	onPrevPage: () => void
 	onToggleHud: () => void
+	/** Optional dispatcher for extended actions (next-song, toggle-metronome, etc.). */
+	onAction?: (action: StageAction) => void
 	/** Optional handler for Spacebar; returns true if handled (e.g. toggling auto-scroll). */
 	onSpace?: () => boolean
 	/** Optional handler for stage tap in scroll mode; returns true if handled (e.g. pausing active auto-scroll). */
@@ -59,6 +70,25 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 		}
 	}
 
+	function dispatchAction(action: StageAction) {
+		if (action === 'none') return
+		if (action === 'autoscroll-or-next-page') {
+			if (!options.onSpace?.()) {
+				options.onNextPage()
+			}
+			return
+		}
+		if (action === 'next-page') {
+			options.onNextPage()
+		} else if (action === 'prev-page') {
+			options.onPrevPage()
+		} else if (action === 'toggle-hud') {
+			options.onToggleHud()
+		} else {
+			options.onAction?.(action)
+		}
+	}
+
 	function onStageClick(event: MouseEvent) {
 		if (options.isPanningOrPinching?.()) {
 			return
@@ -66,54 +96,38 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 		if ((event.target as HTMLElement | null)?.closest?.('.sheetmusic-annotation-link-group')) {
 			return
 		}
-		if (options.isScrollMode()) {
-			if (options.onStageTap?.()) {
-				return
-			}
-			options.onToggleHud()
+		if (options.isScrollMode() && options.onStageTap?.()) {
 			return
 		}
 		const target = event.currentTarget as HTMLElement | null
 		if (!target) return
 		const rect = target.getBoundingClientRect()
-		const relX = (event.clientX - rect.left) / Math.max(1, rect.width)
-		if (relX < 0.25) {
-			options.onPrevPage()
-		} else if (relX > 0.75) {
-			options.onNextPage()
-		} else {
+		if (rect.width <= 0 || rect.height <= 0) {
 			options.onToggleHud()
+			return
 		}
+		const relX = (event.clientX - rect.left) / rect.width
+		const relY = (event.clientY - rect.top) / rect.height
+		const mapping = options.getInputMapping?.() ?? DEFAULT_STAGE_INPUT_MAPPING
+		dispatchAction(resolveTapZoneAction(mapping.tapZoneLayout, relX, relY))
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
 		const tag = (event.target as HTMLElement | null)?.tagName
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
-		switch (event.key) {
-		case ' ':
-			event.preventDefault()
-			if (!options.onSpace?.()) {
-				options.onNextPage()
-			}
-			break
-		case 'ArrowRight':
-		case 'PageDown':
-		case 'Enter':
-			event.preventDefault()
-			options.onNextPage()
-			break
-		case 'ArrowLeft':
-		case 'PageUp':
-		case 'Backspace':
-			event.preventDefault()
-			options.onPrevPage()
-			break
-		case 'Escape':
+		if (event.key === 'Escape') {
 			event.preventDefault()
 			options.onEscape()
-			break
+			return
 		}
+
+		const mapping = options.getInputMapping?.() ?? DEFAULT_STAGE_INPUT_MAPPING
+		const action = resolveKeyAction(event.key, mapping)
+		if (action === null) return
+
+		event.preventDefault()
+		dispatchAction(action)
 	}
 
 	onMounted(() => {

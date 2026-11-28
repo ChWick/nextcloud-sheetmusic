@@ -85,5 +85,18 @@ describe('pdf-layout', () => {
 			{ pageNum: 2, index: 2 },
 			{ pageNum: 4, index: 3, isNextFile: true },
 		])
+
+		// Even-page half-turn interleaved spread: next song page 1 on the left slot, last page on the right slot
+		expect(resolvePagesToRender({
+			layout: 'double',
+			currentPage: 2,
+			doubleSpread: [3, 2],
+			orderedPages: [1, 2],
+			canInterleaveWithNext: true,
+			nextTargetPage: 1,
+		})).toEqual([
+			{ pageNum: 1, index: 3, isNextFile: true },
+			{ pageNum: 2, index: 2 },
+		])
 	})
 })

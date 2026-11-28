@@ -541,4 +541,75 @@ describe('FilePreviewer.vue', () => {
 		expect(stageEl.style.display).toBe('grid')
 		expect(stageEl.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
 	})
+
+	it('keeps previous PDF canvas visible while switching to a slow-loading PDF and shows a non-blocking transition spinner', async () => {
+		vi.useFakeTimers()
+		const axios = (await import('@nextcloud/axios')).default
+		const pdfjs = await import('pdfjs-dist')
+		const customCache = new MemoryFileBinaryCache()
+
+		let resolveSecondFetch!: (val: { data: ArrayBuffer }) => void
+		const secondFetchPromise = new Promise<{ data: ArrayBuffer }>((resolve) => {
+			resolveSecondFetch = resolve
+		})
+
+		const getSpy = vi.mocked(axios.get).mockImplementation((url: string) => {
+			if (url.includes('SongTwo.pdf')) {
+				return secondFetchPromise as any
+			}
+			return Promise.resolve({ data: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]).buffer }) as any
+		})
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/SongOne.pdf?v=1',
+				initialPageLayout: 'single',
+				binaryCache: customCache,
+			},
+		})
+		await flushPromises()
+
+		const initialCanvas = wrapper.find('canvas.sheetmusic-pdf-page').element
+		expect(initialCanvas).toBeTruthy()
+		const containerEl = wrapper.find('[data-test="pdf-viewer-container"]').element as HTMLElement
+		expect(containerEl.style.display).not.toBe('none')
+
+		// Switch to SongTwo.pdf whose network fetch is still pending
+		await wrapper.setProps({ filePath: '/files/scores/SongTwo.pdf?v=1' })
+		await flushPromises()
+
+		// Previous canvas MUST still be visible in the DOM (zero flicker / disappearing)
+		expect(wrapper.find('canvas.sheetmusic-pdf-page').element).toBe(initialCanvas)
+		expect(containerEl.style.display).not.toBe('none')
+		// Transition spinner has NOT appeared yet before the 180ms grace delay
+		expect(wrapper.find('[data-test="file-preview-transition-loading"]').exists()).toBe(false)
+
+		// After 200ms of slow network, subtle non-blocking overlay spinner appears while canvas stays visible
+		vi.advanceTimersByTime(200)
+		await wrapper.vm.$nextTick()
+		expect(wrapper.find('[data-test="file-preview-transition-loading"]').exists()).toBe(true)
+		expect(wrapper.find('canvas.sheetmusic-pdf-page').element).toBe(initialCanvas)
+		expect(containerEl.style.display).not.toBe('none')
+
+		// Resolve SongTwo.pdf -> swaps atomically and hides transition spinner
+		resolveSecondFetch({ data: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]).buffer })
+		await flushPromises()
+
+		expect(wrapper.find('[data-test="file-preview-transition-loading"]').exists()).toBe(false)
+		expect(wrapper.find('canvas.sheetmusic-pdf-page').exists()).toBe(true)
+		expect(wrapper.find('canvas.sheetmusic-pdf-page').element).not.toBe(initialCanvas)
+
+		// Switching back to SongOne.pdf reuses the cached parsed PDF document without re-fetching or re-parsing
+		const getDocCallsBefore = vi.mocked(pdfjs.getDocument).mock.calls.length
+		const axiosCallsBefore = getSpy.mock.calls.length
+		await wrapper.setProps({ filePath: '/files/scores/SongOne.pdf?v=1' })
+		await flushPromises()
+
+		expect(vi.mocked(pdfjs.getDocument).mock.calls.length).toBe(getDocCallsBefore)
+		expect(getSpy.mock.calls.length).toBe(axiosCallsBefore)
+		expect(wrapper.find('[data-test="file-preview-transition-loading"]').exists()).toBe(false)
+
+		wrapper.unmount()
+		vi.useRealTimers()
+	})
 })

@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { usePdfPageNavigation } from '../../../src/composables/usePdfPageNavigation'
+import { getInterleavedStartDoubleSpread, getLastDoubleSpread } from '../../../src/utils/page-turn'
 
 function createNav(overrides: Partial<Parameters<typeof usePdfPageNavigation>[0]> = {}) {
 	const onRerender = vi.fn()
@@ -69,13 +70,18 @@ describe('usePdfPageNavigation', () => {
 		expect(onRerender).toHaveBeenCalledTimes(1)
 	})
 
-	it('scrolls to placeholder in continuous mode instead of rerendering', () => {
-		const scrollIntoView = vi.fn()
-		const placeholder = document.createElement('div')
-		placeholder.dataset.pageIndex = '2'
-		placeholder.scrollIntoView = scrollIntoView
+	it('scrolls to placeholder in continuous mode on nextPage, prevPage, and goToPage without rerendering', () => {
+		const scrollIntoView1 = vi.fn()
+		const scrollIntoView2 = vi.fn()
+		const p1 = document.createElement('div')
+		p1.dataset.pageIndex = '1'
+		p1.scrollIntoView = scrollIntoView1
+		const p2 = document.createElement('div')
+		p2.dataset.pageIndex = '2'
+		p2.scrollIntoView = scrollIntoView2
 		const container = document.createElement('div')
-		container.appendChild(placeholder)
+		container.appendChild(p1)
+		container.appendChild(p2)
 
 		const currentPage = ref(1)
 		const { nav, onRerender } = createNav({
@@ -87,11 +93,16 @@ describe('usePdfPageNavigation', () => {
 
 		expect(nav.currentPageDisplay.value).toBe('1–4')
 		expect(nav.canGoPrev.value).toBe(false)
-		expect(nav.canGoNext.value).toBe(false)
+		expect(nav.canGoNext.value).toBe(true)
 
-		nav.goToPage(2)
+		expect(nav.nextPage()).toBe(true)
 		expect(currentPage.value).toBe(2)
-		expect(scrollIntoView).toHaveBeenCalledTimes(1)
+		expect(nav.canGoPrev.value).toBe(true)
+		expect(scrollIntoView2).toHaveBeenCalledTimes(1)
+
+		expect(nav.prevPage()).toBe(true)
+		expect(currentPage.value).toBe(1)
+		expect(scrollIntoView1).toHaveBeenCalledTimes(1)
 		expect(onRerender).not.toHaveBeenCalled()
 	})
 
@@ -119,5 +130,49 @@ describe('usePdfPageNavigation', () => {
 		await nav.setAutoLayout(true)
 		expect(nav.autoLayout.value).toBe(true)
 		expect(nav.pageLayout.value).toBe('single')
+	})
+
+	it('preserves slot positions when flipping forward and backward across interleaved songs in half-page mode', () => {
+		// Odd-page Song 1 (3 pages) + interleave -> effective total = 4: [1,2] -> [3,2] -> [3,→1]
+		const navOdd = createNav({
+			currentPage: ref(1),
+			totalPages: ref(3),
+			initialPageLayout: 'double',
+			initialDoublePageTurnMode: 'half',
+			interleaveSongs: ref(true),
+			nextFilePath: ref('/music/song2.pdf'),
+		}).nav
+		navOdd.doubleSpread.value = [1, 2]
+		expect(navOdd.nextPage()).toBe(true)
+		expect(navOdd.doubleSpread.value).toEqual([3, 2])
+		expect(navOdd.nextPage()).toBe(true)
+		expect(navOdd.doubleSpread.value).toEqual([3, 4])
+		expect(navOdd.nextSongInterleaveSlot.value).toBe('right')
+		expect(navOdd.currentPageDisplay.value).toBe('3 / →1')
+		expect(navOdd.nextPage()).toBe(false)
+
+		// Entering Song 2 after right-slot interleave keeps Song 2 p.1 on the right: [2, 1] -> [2, 3]
+		expect(getInterleavedStartDoubleSpread(3, 'half')).toEqual([2, 1])
+		// Going back from Song 2 [2, 1] opens Song 1 at [3, 4] (Song 2 p.1 stays on the right)
+		expect(getLastDoubleSpread(navOdd.effectiveDoubleTotalPages.value, 'half')).toEqual([3, 4])
+
+		// Even-page Song 1 (2 pages) + interleave -> effective total = 3: [1,2] -> [→1, 2]
+		const navEven = createNav({
+			currentPage: ref(1),
+			totalPages: ref(2),
+			initialPageLayout: 'double',
+			initialDoublePageTurnMode: 'half',
+			interleaveSongs: ref(true),
+			nextFilePath: ref('/music/song2.pdf'),
+		}).nav
+		navEven.doubleSpread.value = [1, 2]
+		expect(navEven.nextPage()).toBe(true)
+		expect(navEven.doubleSpread.value).toEqual([3, 2])
+		expect(navEven.nextSongInterleaveSlot.value).toBe('left')
+		expect(navEven.currentPageDisplay.value).toBe('→1 / 2')
+		expect(navEven.nextPage()).toBe(false)
+
+		// Going back from Song 2 [1, 2] opens even-page Song 1 at [3, 2] (Song 2 p.1 stays on the left)
+		expect(getLastDoubleSpread(navEven.effectiveDoubleTotalPages.value, 'half')).toEqual([3, 2])
 	})
 })

@@ -80,15 +80,25 @@ export function resolvePagesToRender(opts: {
 
 	if (layout === 'double') {
 		const [leftLogical, rightLogical] = doubleSpread
-		const leftIdx = Math.min(Math.max(1, leftLogical), total) - 1
-		const pages: RenderPagePlan[] = [{ pageNum: orderedPages[leftIdx] || 1, index: leftIdx + 1 }]
+		const nextPageNum = nextTargetPage && nextTargetPage >= 1 ? nextTargetPage : 1
+		const pages: RenderPagePlan[] = []
+		if (leftLogical === total + 1 && canInterleaveWithNext) {
+			pages.push({
+				pageNum: nextPageNum,
+				index: total + 1,
+				isNextFile: true,
+			})
+		} else {
+			const leftIdx = Math.min(Math.max(1, leftLogical), total) - 1
+			pages.push({ pageNum: orderedPages[leftIdx] || 1, index: leftIdx + 1 })
+		}
 		if (rightLogical !== null && rightLogical >= 1) {
 			if (rightLogical <= total) {
 				const rightIdx = rightLogical - 1
 				pages.push({ pageNum: orderedPages[rightIdx] || 1, index: rightIdx + 1 })
 			} else if (rightLogical === total + 1 && canInterleaveWithNext) {
 				pages.push({
-					pageNum: nextTargetPage && nextTargetPage >= 1 ? nextTargetPage : 1,
+					pageNum: nextPageNum,
 					index: total + 1,
 					isNextFile: true,
 				})

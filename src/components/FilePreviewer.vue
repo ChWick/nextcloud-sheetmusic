@@ -16,7 +16,7 @@ import { usePdfPageNavigation } from '../composables/usePdfPageNavigation'
 import { usePdfResizeObserver } from '../composables/usePdfResizeObserver'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
-import { fetchCachedBinaryFile } from '../utils/file-binary'
+import { fetchCachedBinaryFile, preloadCachedBinaryFile } from '../utils/file-binary'
 import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
@@ -61,6 +61,8 @@ import {
 	type DoublePageTurnMode,
 	getDoubleSpreadForPage,
 	getInitialDoubleSpread,
+	getInterleavedStartDoubleSpread,
+	getLastDoubleSpread,
 } from '../utils/page-turn'
 
 const props = withDefaults(
@@ -92,6 +94,7 @@ const props = withDefaults(
 		nextTargetPage?: number
 		nextPageOrder?: string | null
 		interleaveSongs?: boolean
+		interleavedStart?: boolean
 		backgroundColor?: string
 		tightCrop?: boolean
 		scoreColorMode?: ScoreColorMode
@@ -130,6 +133,7 @@ const props = withDefaults(
 		nextTargetPage: undefined,
 		nextPageOrder: undefined,
 		interleaveSongs: false,
+		interleavedStart: false,
 		backgroundColor: '',
 		tightCrop: false,
 		scoreColorMode: 'normal',
@@ -160,17 +164,114 @@ const pdfStage = ref<HTMLElement>()
 const docxContainer = ref<HTMLElement>()
 const xlsxSheets = ref<XlsxSheet[]>([])
 const isLoading = ref(false)
+const isTransitionLoading = ref(false)
 const errorMessage = ref('')
 let currentLoadId = 0
 let currentRenderId = 0
+let activeLoadedFilePath = ''
+let renderedFilePath = ''
+let transitionSpinnerTimer: ReturnType<typeof setTimeout> | null = null
+let nextPdfPrewarmCancel: (() => void) | null = null
+let isUnmounted = false
+
+const TRANSITION_SPINNER_DELAY_MS = 180
+const MAX_CACHED_PDF_DOCS = 3
+const pdfDocCache = new Map<string, any>()
 
 const loadedPdf = shallowRef<any>(null)
-const loadedNextPdf = shallowRef<any>(null)
-let loadedNextPdfPath = ''
 const totalPages = ref(1)
 const currentPage = ref(1)
 const fileSizeBytes = ref<number | null>(null)
 const pageResolutions = ref<PdfPageResolutionSummary[]>([])
+
+function clearTransitionSpinnerTimer() {
+	if (transitionSpinnerTimer) {
+		clearTimeout(transitionSpinnerTimer)
+		transitionSpinnerTimer = null
+	}
+}
+
+function cancelNextPdfPrewarm() {
+	if (nextPdfPrewarmCancel) {
+		nextPdfPrewarmCancel()
+		nextPdfPrewarmCancel = null
+	}
+}
+
+function getCachedPdfDoc(path: string): any | null {
+	const existing = pdfDocCache.get(path)
+	if (!existing) return null
+	// Refresh LRU order
+	pdfDocCache.delete(path)
+	pdfDocCache.set(path, existing)
+	return existing
+}
+
+function cachePdfDoc(path: string, doc: any) {
+	if (!path || !doc) return
+	if (isUnmounted) {
+		void destroyPdfJsDocument(doc)
+		return
+	}
+	const prev = pdfDocCache.get(path)
+	if (prev && prev !== doc && prev !== loadedPdf.value) {
+		void destroyPdfJsDocument(prev)
+	}
+	pdfDocCache.delete(path)
+	pdfDocCache.set(path, doc)
+
+	while (pdfDocCache.size > MAX_CACHED_PDF_DOCS) {
+		let evictedKey: string | null = null
+		for (const [key, candidate] of pdfDocCache.entries()) {
+			if (candidate !== loadedPdf.value && key !== props.filePath && key !== props.nextFilePath) {
+				evictedKey = key
+				break
+			}
+		}
+		if (!evictedKey) break
+		const evictedDoc = pdfDocCache.get(evictedKey)
+		pdfDocCache.delete(evictedKey)
+		if (evictedDoc && evictedDoc !== loadedPdf.value) {
+			void destroyPdfJsDocument(evictedDoc)
+		}
+	}
+}
+
+function scheduleNextPdfPrewarm() {
+	cancelNextPdfPrewarm()
+	const nextPath = props.nextFilePath
+	if (!nextPath || !checkIsPdfFile(nextPath.split('?')[0].toLowerCase()) || pdfDocCache.has(nextPath)) {
+		return
+	}
+	const runPrewarm = () => {
+		nextPdfPrewarmCancel = null
+		void (async () => {
+			if (isUnmounted || props.nextFilePath !== nextPath || pdfDocCache.has(nextPath)) return
+			const bytes = await preloadCachedBinaryFile(nextPath, {
+				cache: props.binaryCache ?? defaultFileBinaryCache,
+				requirePdfHeader: true,
+			})
+			if (!bytes || isUnmounted || props.nextFilePath !== nextPath || pdfDocCache.has(nextPath)) return
+			try {
+				const doc = await loadPdfJsDocument(bytes.slice())
+				if (isUnmounted) {
+					void destroyPdfJsDocument(doc)
+					return
+				}
+				cachePdfDoc(nextPath, doc)
+			} catch {
+				// Best-effort background pre-warm
+			}
+		})()
+	}
+	if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+		const handle = (window as any).requestIdleCallback(runPrewarm, { timeout: 500 })
+		nextPdfPrewarmCancel = () => (window as any).cancelIdleCallback?.(handle)
+	} else {
+		const handle = setTimeout(runPrewarm, 120)
+		nextPdfPrewarmCancel = () => clearTimeout(handle)
+	}
+}
 
 const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
 const isPdfFile = computed(() => checkIsPdfFile(fileExtTarget.value))
@@ -238,6 +339,7 @@ const {
 	linkBeacon,
 	pickingLinkTarget: computed(() => props.pickingLinkTarget),
 	nightMode: computed(() => isNightScoreMode(props.scoreColorMode)),
+	canRefresh: () => !renderedFilePath || renderedFilePath === props.filePath,
 	onJumpToPage: jumpFromLink,
 	onStartPickLinkTarget: (req) => emit('start-pick-link-target', req),
 	onCompletePickLinkTarget: (res) => emit('complete-pick-link-target', res),
@@ -257,6 +359,7 @@ const {
 	doubleSpread,
 	canInterleaveWithNext,
 	effectiveDoubleTotalPages,
+	nextSongInterleaveSlot,
 	isShowingNextSongFirstPage,
 	currentPageDisplay,
 	canGoPrev,
@@ -278,6 +381,7 @@ const {
 	initialPageLayout: props.initialPageLayout,
 	initialDoublePageTurnMode: props.initialDoublePageTurnMode,
 	interleaveSongs: computed(() => props.interleaveSongs),
+	interleavedStart: computed(() => props.interleavedStart),
 	nextFilePath: computed(() => props.nextFilePath),
 	onRerender: () => renderCurrentView(),
 })
@@ -362,7 +466,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		if (pageLayout.value !== resolved) {
 			pageLayout.value = resolved
 			if (resolved === 'double') {
-				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
 			}
 		}
 	}
@@ -440,14 +544,14 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 
 	async function getNextPdfDocument(): Promise<any | null> {
 		if (!props.nextFilePath) return null
-		if (loadedNextPdf.value && loadedNextPdfPath === props.nextFilePath) {
-			return loadedNextPdf.value
+		const cached = getCachedPdfDoc(props.nextFilePath)
+		if (cached) {
+			return cached
 		}
 		const binaryData = await fetchBinaryData(props.nextFilePath, currentLoadId)
 		if (!binaryData) return null
 		const nextPdf = await loadPdfJsDocument(binaryData.slice())
-		loadedNextPdf.value = nextPdf
-		loadedNextPdfPath = props.nextFilePath
+		cachePdfDoc(props.nextFilePath, nextPdf)
 		return nextPdf
 	}
 
@@ -549,7 +653,10 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 					delete placeholder.dataset.cropRight
 					delete placeholder.dataset.cropBottom
 				}
-				if (!isNextFile) {
+				if (isNextFile) {
+					placeholder.dataset.isNextFile = 'true'
+				} else {
+					delete placeholder.dataset.isNextFile
 					mountAnnotationOverlay(placeholder, resolvedPageNum, viewport.width, viewport.height, cropped ? cropBox : undefined)
 				}
 			}
@@ -578,6 +685,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			isCustomZoom: zoomMode.value === 'custom',
 		})
 		pdfStage.value.replaceChildren(...children)
+		renderedFilePath = props.filePath
 	}
 
 	if (pageLayout.value === 'continuous') {
@@ -615,6 +723,19 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		}
 
 		swapStageContent(placeholders)
+
+		if (currentPage.value > 1 || props.startAtEnd) {
+			const targetPlaceholder = placeholders[Math.max(0, currentPage.value - 1)]
+			if (targetPlaceholder) {
+				targetPlaceholder.scrollIntoView({
+					behavior: 'auto',
+					block: props.startAtEnd ? 'end' : 'start',
+				})
+			}
+		} else if (pdfContainer.value) {
+			pdfContainer.value.scrollTop = 0
+			pdfContainer.value.scrollLeft = 0
+		}
 
 		intersectionObserver = observeContinuousPdfPages({
 			root: pdfContainer.value,
@@ -710,27 +831,10 @@ async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8A
 	})
 }
 
-async function loadAndRenderFile() {
-	const loadId = ++currentLoadId
-	errorMessage.value = ''
-	if (loadedPdf.value) {
-		void destroyPdfJsDocument(loadedPdf.value)
-		loadedPdf.value = null
-	}
-	if (loadedNextPdf.value) {
-		void destroyPdfJsDocument(loadedNextPdf.value)
-		loadedNextPdf.value = null
-		loadedNextPdfPath = ''
-	}
-	totalPages.value = 1
-	currentPage.value = 1
-	rotation.value = 0
-	fileSizeBytes.value = null
-	pageResolutions.value = []
-	xlsxSheets.value = []
-
-	await nextTick()
+function clearRenderedStages() {
+	renderedFilePath = ''
 	cleanupObserver()
+	unmountAnnotationOverlays()
 	if (pdfStage.value) {
 		releaseChildCanvases(pdfStage.value)
 		pdfStage.value.replaceChildren()
@@ -740,65 +844,122 @@ async function loadAndRenderFile() {
 	if (docxContainer.value) {
 		docxContainer.value.replaceChildren()
 	}
+}
 
-	if (!props.filePath) {
+function hasRenderedPdfStage(): boolean {
+	return Boolean(pdfStage.value && pdfStage.value.childElementCount > 0 && !errorMessage.value)
+}
+
+async function loadAndRenderFile() {
+	const loadId = ++currentLoadId
+	const targetFilePath = props.filePath
+	clearTransitionSpinnerTimer()
+	cancelNextPdfPrewarm()
+
+	const preservePreviousPdfStage = Boolean(targetFilePath) && isPdfFile.value && hasRenderedPdfStage()
+
+	if (!preservePreviousPdfStage) {
+		errorMessage.value = ''
+		activeLoadedFilePath = ''
+		loadedPdf.value = null
+		totalPages.value = 1
+		currentPage.value = 1
+		rotation.value = 0
+		fileSizeBytes.value = null
+		pageResolutions.value = []
+		xlsxSheets.value = []
+
+		await nextTick()
+		if (loadId !== currentLoadId) return
+		clearRenderedStages()
+	}
+
+	if (!targetFilePath) {
 		isLoading.value = false
+		isTransitionLoading.value = false
 		errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 		return
 	}
 
 	if (!isPdfFile.value && !isDocxFile.value && !isXlsxFile.value) {
 		isLoading.value = false
+		isTransitionLoading.value = false
 		return
 	}
 
-	isLoading.value = true
+	if (preservePreviousPdfStage) {
+		isTransitionLoading.value = false
+		transitionSpinnerTimer = setTimeout(() => {
+			if (loadId === currentLoadId) {
+				isTransitionLoading.value = true
+			}
+		}, TRANSITION_SPINNER_DELAY_MS)
+	} else {
+		isLoading.value = true
+	}
 
 	try {
-		const binaryData = await fetchBinaryData(props.filePath, loadId)
-		if (loadId !== currentLoadId) return
+		if (!isPdfFile.value) {
+			const binaryData = await fetchBinaryData(targetFilePath, loadId)
+			if (loadId !== currentLoadId) return
+
+			fileSizeBytes.value = typeof binaryData?.byteLength === 'number' ? binaryData.byteLength : null
+
+			if (isDocxFile.value) {
+				if (!binaryData) {
+					errorMessage.value = t('sheetmusic', 'Failed to load document.')
+					return
+				}
+				const { renderAsync } = await import('docx-preview')
+				if (loadId !== currentLoadId) return
+				isLoading.value = false
+				await nextTick()
+				if (loadId !== currentLoadId || !docxContainer.value) return
+				await renderAsync(binaryData.slice().buffer, docxContainer.value, undefined, {
+					inWrapper: true,
+					ignoreWidth: false,
+					ignoreHeight: false,
+				})
+				return
+			}
+
+			if (isXlsxFile.value) {
+				if (!binaryData) {
+					errorMessage.value = t('sheetmusic', 'Failed to load spreadsheet.')
+					return
+				}
+				const XLSX = await import('xlsx')
+				if (loadId !== currentLoadId) return
+				const workbook = XLSX.read(binaryData, { type: 'array' })
+				xlsxSheets.value = workbook.SheetNames.map((name) => ({
+					name,
+					html: XLSX.utils.sheet_to_html(workbook.Sheets[name], { editable: false }),
+				}))
+				return
+			}
+		}
+
+		const cache = props.binaryCache ?? defaultFileBinaryCache
+		let pdf = getCachedPdfDoc(targetFilePath)
+		let binaryData: Uint8Array | null = cache.get(targetFilePath)
+
+		if (!pdf) {
+			binaryData = await fetchBinaryData(targetFilePath, loadId)
+			if (loadId !== currentLoadId) return
+			pdf = await loadPdfJsDocument(binaryData ? binaryData.slice() : binaryData)
+			if (loadId !== currentLoadId) {
+				cachePdfDoc(targetFilePath, pdf)
+				return
+			}
+			cachePdfDoc(targetFilePath, pdf)
+		}
 
 		fileSizeBytes.value = typeof binaryData?.byteLength === 'number' ? binaryData.byteLength : null
-
-		if (isDocxFile.value) {
-			if (!binaryData) {
-				errorMessage.value = t('sheetmusic', 'Failed to load document.')
-				return
-			}
-			const { renderAsync } = await import('docx-preview')
-			if (loadId !== currentLoadId) return
-			isLoading.value = false
-			await nextTick()
-			if (loadId !== currentLoadId || !docxContainer.value) return
-			await renderAsync(binaryData.slice().buffer, docxContainer.value, undefined, {
-				inWrapper: true,
-				ignoreWidth: false,
-				ignoreHeight: false,
-			})
-			return
-		}
-
-		if (isXlsxFile.value) {
-			if (!binaryData) {
-				errorMessage.value = t('sheetmusic', 'Failed to load spreadsheet.')
-				return
-			}
-			const XLSX = await import('xlsx')
-			if (loadId !== currentLoadId) return
-			const workbook = XLSX.read(binaryData, { type: 'array' })
-			xlsxSheets.value = workbook.SheetNames.map((name) => ({
-				name,
-				html: XLSX.utils.sheet_to_html(workbook.Sheets[name], { editable: false }),
-			}))
-			return
-		}
-
-		const pdfData = binaryData
-		const pdf = await loadPdfJsDocument(pdfData ? pdfData.slice() : pdfData)
-
-		if (loadId !== currentLoadId) return
-
+		errorMessage.value = ''
+		rotation.value = 0
+		pageResolutions.value = []
 		loadedPdf.value = pdf
+		activeLoadedFilePath = targetFilePath
 		const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
 		totalPages.value = ordered.length
 
@@ -810,38 +971,54 @@ async function loadAndRenderFile() {
 				: 1
 		}
 
-		// Collect page resolution summaries (up to first 25 pages for responsiveness)
-		try {
-			const summaries = await inspectPdfDocumentResolutions(pdf, 25)
-			if (loadId === currentLoadId) {
-				pageResolutions.value = summaries
-			}
-		} catch {
-			// Ignore resolution inspection errors on mock or malformed PDFs
+		if (!preservePreviousPdfStage) {
+			isLoading.value = false
+			await nextTick()
+			if (loadId !== currentLoadId) return
+			syncObservedSize()
 		}
-
-		if (loadId !== currentLoadId) return
-		isLoading.value = false
-		await nextTick()
-		if (loadId !== currentLoadId) return
-
-		syncObservedSize()
 
 		// If the document is large (>30 pages) and caller didn't specify a paged/auto layout, default to single page
 		if (pdf.numPages > 30 && props.initialPageLayout === 'continuous') {
 			pageLayout.value = 'single'
 		} else if (autoLayout.value) {
 			pageLayout.value = await resolveAutoLayoutForPage(currentPage.value)
+			if (loadId !== currentLoadId) return
 		}
 
-		doubleSpread.value = effectiveDoubleTotalPages.value > 1
-			? getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
-			: getInitialDoubleSpread(effectiveDoubleTotalPages.value)
+		if (props.startAtEnd) {
+			doubleSpread.value = getLastDoubleSpread(effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+		} else if (props.interleavedStart) {
+			doubleSpread.value = getInterleavedStartDoubleSpread(effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+		} else {
+			doubleSpread.value = effectiveDoubleTotalPages.value > 1
+				? getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+				: getInitialDoubleSpread(effectiveDoubleTotalPages.value)
+		}
 
-		await renderCurrentView()
+		await renderCurrentView(() => resetPan())
+		if (loadId !== currentLoadId) return
+
+		// Collect page resolution summaries in the background so initial page paint is never delayed
+		void inspectPdfDocumentResolutions(pdf, 25)
+			.then((summaries) => {
+				if (loadId === currentLoadId && loadedPdf.value === pdf) {
+					pageResolutions.value = summaries
+				}
+			})
+			.catch(() => {
+				// Ignore resolution inspection errors on mock or malformed PDFs
+			})
+
+		scheduleNextPdfPrewarm()
 	} catch (error: any) {
 		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
+			if (preservePreviousPdfStage) {
+				loadedPdf.value = null
+				activeLoadedFilePath = ''
+				clearRenderedStages()
+			}
 			const status = error?.response?.status ?? error?.status
 			if (status === 404) {
 				errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
@@ -851,7 +1028,9 @@ async function loadAndRenderFile() {
 		}
 	} finally {
 		if (loadId === currentLoadId) {
+			clearTransitionSpinnerTimer()
 			isLoading.value = false
+			isTransitionLoading.value = false
 		}
 	}
 }
@@ -870,19 +1049,25 @@ const { syncObservedSize } = usePdfResizeObserver({
 })
 
 onUnmounted(() => {
+	isUnmounted = true
+	clearTransitionSpinnerTimer()
+	cancelNextPdfPrewarm()
 	cancelIdleCropPrefetch()
 	unmountAnnotationOverlays()
 	cleanupObserver()
 	releaseChildCanvases(pdfStage.value)
-	if (loadedPdf.value) {
+	const destroyed = new Set<any>()
+	for (const doc of pdfDocCache.values()) {
+		if (doc && !destroyed.has(doc)) {
+			destroyed.add(doc)
+			void destroyPdfJsDocument(doc)
+		}
+	}
+	pdfDocCache.clear()
+	if (loadedPdf.value && !destroyed.has(loadedPdf.value)) {
 		void destroyPdfJsDocument(loadedPdf.value)
-		loadedPdf.value = null
 	}
-	if (loadedNextPdf.value) {
-		void destroyPdfJsDocument(loadedNextPdf.value)
-		loadedNextPdf.value = null
-		loadedNextPdfPath = ''
-	}
+	loadedPdf.value = null
 })
 
 watch(() => props.filePath, loadAndRenderFile, { immediate: true })
@@ -910,7 +1095,7 @@ watch(
 watch(
 	() => props.tightCrop,
 	() => {
-		if (loadedPdf.value) {
+		if (loadedPdf.value && renderedFilePath === props.filePath) {
 			renderCurrentView()
 		}
 	},
@@ -919,11 +1104,27 @@ watch(
 watch(
 	() => props.pageOrder,
 	() => {
-		if (loadedPdf.value) {
+		if (loadedPdf.value && renderedFilePath === props.filePath) {
 			const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
 			totalPages.value = ordered.length
 			currentPage.value = 1
-			doubleSpread.value = getInitialDoubleSpread(totalPages.value)
+			doubleSpread.value = getInitialDoubleSpread(effectiveDoubleTotalPages.value)
+			renderCurrentView()
+		}
+	},
+)
+
+watch(
+	() => props.interleaveSongs,
+	() => {
+		if (loadedPdf.value && renderedFilePath === props.filePath && pageLayout.value === 'double') {
+			const [left, right] = doubleSpread.value
+			const maxPage = effectiveDoubleTotalPages.value
+			if (left > maxPage || (right !== null && right > maxPage)) {
+				doubleSpread.value = getLastDoubleSpread(maxPage, doublePageTurnMode.value)
+			} else if (right === null && left === totalPages.value && maxPage > totalPages.value) {
+				doubleSpread.value = [left, totalPages.value + 1]
+			}
 			renderCurrentView()
 		}
 	},
@@ -932,8 +1133,32 @@ watch(
 watch(
 	() => props.targetPage,
 	(newPage) => {
-		if (newPage && newPage >= 1) {
+		if (loadedPdf.value && renderedFilePath === props.filePath && newPage && newPage >= 1) {
 			goToPage(newPage)
+		}
+	},
+)
+
+watch(
+	() => props.startAtEnd,
+	(atEnd) => {
+		if (atEnd && loadedPdf.value && renderedFilePath === props.filePath && totalPages.value > 0) {
+			if (pageLayout.value === 'double') {
+				currentPage.value = totalPages.value
+				doubleSpread.value = getLastDoubleSpread(effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+				renderCurrentView()
+			} else {
+				goToPage(totalPages.value)
+			}
+		}
+	},
+)
+
+watch(
+	() => props.nextFilePath,
+	() => {
+		if (loadedPdf.value && activeLoadedFilePath === props.filePath) {
+			scheduleNextPdfPrewarm()
 		}
 	},
 )
@@ -952,10 +1177,6 @@ const { wasRecentlyPinching, wasRecentlyDragging, resetPan } = usePdfTouchZoom({
 		customScale.value = scale
 		await renderCurrentView(onBeforeSwap)
 	},
-})
-
-watch(() => props.filePath, () => {
-	resetPan()
 })
 
 function canPanHorizontally(): boolean {
@@ -991,6 +1212,7 @@ defineExpose({
 	zoomMode,
 	canGoPrev,
 	canGoNext,
+	nextSongInterleaveSlot,
 	isShowingNextSongFirstPage,
 	fileSizeBytes,
 	pageResolutions,
@@ -1023,6 +1245,15 @@ const scoreStageStyle = computed<Record<string, string>>(() => {
 	<div :class="$style.wrapper">
 		<div v-if="isLoading" :class="$style.loading">
 			<NcLoadingIcon :size="32" :name="t('sheetmusic', 'Loading file...')" />
+		</div>
+
+		<div
+			v-if="isTransitionLoading && !isLoading"
+			:class="$style.transitionLoading"
+			role="status"
+			aria-live="polite"
+			data-test="file-preview-transition-loading">
+			<NcLoadingIcon :size="24" :name="t('sheetmusic', 'Loading file...')" />
 		</div>
 
 		<p v-if="errorMessage" :class="$style.error" role="alert">
@@ -1164,6 +1395,23 @@ button[type='button'].linkJumpBackChip:hover {
 	align-items: center;
 	justify-content: center;
 	padding: 48px;
+}
+
+.transitionLoading {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 12px 16px;
+	border-radius: 999px;
+	background: rgba(15, 23, 42, 0.72);
+	color: #ffffff;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+	pointer-events: none;
 }
 
 .error {
