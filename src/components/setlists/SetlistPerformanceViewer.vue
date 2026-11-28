@@ -19,11 +19,10 @@ import {
 	type StageAction,
 	type StageInputMapping,
 } from '../../utils/stage-input-mapping'
-import { deleteSongAnnotation, fetchSongAnnotations, saveSongAnnotation } from '../../api/annotations'
-import { createUuid } from '../../composables/useAnnotationEditor'
 import { useAutoScroll } from '../../composables/useAutoScroll'
 import { useHudAutoHide } from '../../composables/useHudAutoHide'
 import { useMetronome } from '../../composables/useMetronome'
+import { getSongPrimaryFileId, usePerformanceAnnotations } from '../../composables/usePerformanceAnnotations'
 import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
 import { usePitchPipe } from '../../composables/usePitchPipe'
 import { useScoreAppearance } from '../../composables/useScoreAppearance'
@@ -33,15 +32,7 @@ import {
 	extractSongTempo,
 	extractSongTimeSignature,
 } from '../../utils/music-tools'
-import type { AnnotationLayer, SheetAnnotation } from '../../types/annotation'
-import {
-	createDefaultAnnotationLayers,
-	filterAndSortAnnotationsForLayers,
-	getCachedFileAnnotationLayers,
-	loadFileAnnotationLayers,
-	persistFileAnnotationLayers,
-	toggleAnnotationLayerVisibility,
-} from '../../utils/annotationLayers'
+import type { SheetAnnotation } from '../../types/annotation'
 import type { SetlistFile, SetlistItem, Song, SongFile } from '../../types/song'
 import { preloadCachedBinaryFile } from '../../utils/file-binary'
 import { isPdfFile, pickPrimarySongFile } from '../../utils/file'
@@ -259,27 +250,6 @@ function toggleDrawer() {
 	}
 }
 
-const annotations = ref<SheetAnnotation[]>([])
-const annotationLayers = ref<AnnotationLayer[]>(createDefaultAnnotationLayers())
-let annotationRequestId = 0
-const annotationsCache = new Map<string, SheetAnnotation[]>()
-
-function getAnnotationCacheKey(songId: number, fileId: number): string {
-	return `${songId}:${fileId}`
-}
-
-function getSongPrimaryFileId(song: Song | null, file: SongFile | null): number {
-	return Number(file?.fileId ?? file?.id ?? song?.files?.[0]?.fileId ?? song?.files?.[0]?.id ?? 0)
-}
-
-const visibleAnnotations = computed(() => {
-	const songId = currentSong.value?.id
-	const scoped = songId
-		? annotations.value.filter((ann) => !ann.songId || ann.songId === songId)
-		: annotations.value
-	return filterAndSortAnnotationsForLayers(scoped, annotationLayers.value)
-})
-
 const songsById = computed(() => {
 	const map = new Map<number, Song>()
 	for (const song of props.songs) {
@@ -377,6 +347,29 @@ const totalPages = computed(() => previewerRef.value?.totalPages ?? 1)
 const hasPrevSong = computed(() => currentIndex.value > 0)
 const hasNextSong = computed(() => currentIndex.value < props.items.length - 1)
 
+const {
+	annotationLayers,
+	visibleAnnotations,
+	preloadSongAnnotations,
+	onToggleLayerVisibility,
+	onQuickCreateAnnotation,
+	onQuickDeleteAnnotation,
+} = usePerformanceAnnotations({
+	libraryId: computed(() => props.libraryId),
+	currentSong,
+	currentFile,
+	currentFileId,
+	isSingleSongMode,
+	initialAnnotations: computed(() => props.initialAnnotations),
+	canStylusQuickDraw,
+	showAnnotations,
+	onEnsureAnnotationsVisible: () => {
+		showAnnotations.value = true
+		previewerRef.value?.toggleAnnotations()
+	},
+	onEmitAnnotations: (list) => emit('update:annotations', list),
+})
+
 function preloadAdjacentSongs() {
 	const candidateIndices = [
 		currentIndex.value + 1,
@@ -395,59 +388,9 @@ function preloadAdjacentSongs() {
 			seenPaths.add(filePath)
 			void preloadCachedBinaryFile(filePath, { requirePdfHeader: true })
 		}
-		if (song && props.libraryId > 0) {
-			const fileId = getSongPrimaryFileId(song, file)
-			if (fileId > 0) {
-				void loadFileAnnotationLayers(fileId).catch(() => {})
-			}
-			const cacheKey = getAnnotationCacheKey(song.id, fileId)
-			if (!annotationsCache.has(cacheKey) && !seenAnnotationKeys.has(cacheKey)) {
-				seenAnnotationKeys.add(cacheKey)
-				void fetchSongAnnotations(song.id, fileId || undefined)
-					.then((list) => {
-						annotationsCache.set(cacheKey, list)
-					})
-					.catch(() => {})
-			}
-		}
+		preloadSongAnnotations(song, file, seenAnnotationKeys)
 	}
 }
-
-watch([currentSong, currentFile], async ([song]) => {
-	const reqId = ++annotationRequestId
-	const targetFileId = currentFileId.value
-	annotationLayers.value = getCachedFileAnnotationLayers(targetFileId)
-	if (targetFileId > 0) {
-		void loadFileAnnotationLayers(targetFileId).then((loaded) => {
-			if (reqId === annotationRequestId) {
-				annotationLayers.value = loaded
-			}
-		})
-	}
-	if (!song || props.libraryId <= 0) {
-		annotations.value = []
-		return
-	}
-	if (isSingleSongMode.value && props.initialAnnotations !== undefined) {
-		annotations.value = props.initialAnnotations
-		return
-	}
-	const cacheKey = getAnnotationCacheKey(song.id, targetFileId)
-	// Swap synchronously to cached annotations (or empty) so the previous song's
-	// annotations never flash on the newly rendered song while fetching.
-	annotations.value = annotationsCache.get(cacheKey) ?? []
-	try {
-		const list = await fetchSongAnnotations(song.id, targetFileId || undefined)
-		annotationsCache.set(cacheKey, list)
-		if (reqId === annotationRequestId) {
-			annotations.value = list
-		}
-	} catch {
-		if (reqId === annotationRequestId && !annotationsCache.has(cacheKey)) {
-			annotations.value = []
-		}
-	}
-}, { immediate: true })
 
 watch(currentIndex, (index) => {
 	emit('update:current-index', index)
@@ -534,85 +477,6 @@ function onToggleAnnotations() {
 	showAnnotations.value = !showAnnotations.value
 	previewerRef.value?.toggleAnnotations()
 	persistCurrentSettings()
-}
-
-function onToggleLayerVisibility(layerId: number) {
-	const next = toggleAnnotationLayerVisibility(annotationLayers.value, layerId)
-	annotationLayers.value = next
-	const targetFileId = currentFileId.value
-	if (targetFileId > 0) {
-		void persistFileAnnotationLayers(targetFileId, next)
-	}
-	const toggled = next.find((l) => l.id === layerId)
-	if (toggled?.visible && !showAnnotations.value) {
-		showAnnotations.value = true
-		previewerRef.value?.toggleAnnotations()
-	}
-}
-
-const pendingQuickDeleteUuids = new Set<string>()
-
-async function onQuickCreateAnnotation(draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) {
-	if (!canStylusQuickDraw.value || !currentSong.value) return
-	const songId = currentSong.value.id
-	const fileId = currentFileId.value
-	const reqIdAtStart = annotationRequestId
-	const visibleLayer = annotationLayers.value.find((l) => l.visible)
-	const targetLayerId = visibleLayer?.id ?? 0
-	const optimistic: SheetAnnotation = {
-		...draft,
-		uuid: draft.uuid || createUuid(),
-		songId,
-		fileId,
-		layerId: draft.layerId ?? targetLayerId,
-	}
-	const cacheKey = getAnnotationCacheKey(songId, fileId)
-	annotations.value = [...annotations.value, optimistic]
-	annotationsCache.set(cacheKey, annotations.value)
-	if (isSingleSongMode.value) {
-		emit('update:annotations', annotations.value)
-	}
-	if (!showAnnotations.value) {
-		showAnnotations.value = true
-		previewerRef.value?.toggleAnnotations()
-	}
-	try {
-		const saved = await saveSongAnnotation(songId, optimistic)
-		if (pendingQuickDeleteUuids.delete(optimistic.uuid)) {
-			if (saved.id) {
-				void deleteSongAnnotation(saved.id).catch(() => {})
-			}
-			return
-		}
-		if (reqIdAtStart !== annotationRequestId) return
-		annotations.value = annotations.value.map((a) => (a.uuid === optimistic.uuid ? saved : a))
-		annotationsCache.set(cacheKey, annotations.value)
-		if (isSingleSongMode.value) {
-			emit('update:annotations', annotations.value)
-		}
-	} catch {
-		// Keep optimistic stroke locally if offline or transient save error
-	}
-}
-
-async function onQuickDeleteAnnotation(ann: SheetAnnotation) {
-	if (!canStylusQuickDraw.value) return
-	annotations.value = annotations.value.filter((a) => a.uuid !== ann.uuid)
-	if (currentSong.value) {
-		annotationsCache.set(getAnnotationCacheKey(currentSong.value.id, currentFileId.value), annotations.value)
-	}
-	if (isSingleSongMode.value) {
-		emit('update:annotations', annotations.value)
-	}
-	if (ann.id) {
-		try {
-			await deleteSongAnnotation(ann.id)
-		} catch {
-			// Ignore transient delete errors
-		}
-	} else if (ann.uuid) {
-		pendingQuickDeleteUuids.add(ann.uuid)
-	}
 }
 
 async function toggleFullscreen() {

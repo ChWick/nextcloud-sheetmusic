@@ -28,8 +28,10 @@ export interface PerformanceStageInputOptions {
 }
 
 /**
- * Handles touch swipe, left/center/right tap zones, and keyboard/pedal navigation
+ * Handles touch swipe, tap zones, and keyboard/pedal navigation
  * for the fullscreen performance viewer stage.
+ *
+ * @param options Stage input state accessors and action handlers
  */
 export function usePerformanceStageInput(options: PerformanceStageInputOptions) {
 	let touchStartX = 0
