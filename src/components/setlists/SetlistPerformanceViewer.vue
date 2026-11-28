@@ -37,6 +37,7 @@ import type { SetlistFile, SetlistItem, Song, SongFile } from '../../types/song'
 import { preloadCachedBinaryFile } from '../../utils/file-binary'
 import { isPdfFile, pickPrimarySongFile } from '../../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../../utils/file-version'
+import { resolveBookmarkPageBounds } from '../../utils/page-order'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 import {
 	createLibraryPerformanceStore,
@@ -292,19 +293,31 @@ function buildVersionedPath(file: SongFile | null): string {
 	return getVersionedFileUrl(file.path, getFileVersionToken(file))
 }
 
+function resolveItemBounds(item: SetlistItem | null, song: Song | null, file: SongFile | null) {
+	const matchedBookmark = item?.bookmarkId
+		? song?.bookmarks?.find((b) => b.id === item.bookmarkId) ?? null
+		: null
+	return resolveBookmarkPageBounds({
+		basePageOrder: file?.pageOrder ?? null,
+		startPage: item?.pageNum ?? matchedBookmark?.pageNum ?? null,
+		endPage: item?.endPage ?? matchedBookmark?.endPage ?? null,
+	})
+}
+
 const currentFile = computed(() => pickPrimaryFile(currentSong.value, isSingleSongMode.value ? props.preferredFileId : undefined))
 const currentFileId = computed(() => getSongPrimaryFileId(currentSong.value, currentFile.value))
 const canStylusQuickDraw = computed(() =>
 	!isConcertMode.value && Boolean(currentSong.value) && currentFileId.value > 0 && props.libraryId > 0,
 )
 const currentFilePath = computed(() => buildVersionedPath(currentFile.value))
-const currentPageOrder = computed(() => currentFile.value?.pageOrder ?? null)
+const currentItemBounds = computed(() => resolveItemBounds(currentItem.value, currentSong.value, currentFile.value))
+const currentPageOrder = computed(() => currentItemBounds.value.pageOrder)
 const currentTargetPage = computed(() => {
 	if (startAtEnd.value) return undefined
 	if (jumpTargetPage.value !== null && jumpTargetPage.value >= 1) {
 		return jumpTargetPage.value
 	}
-	const base = currentItem.value?.pageNum && currentItem.value.pageNum >= 1 ? currentItem.value.pageNum : 1
+	const base = currentItemBounds.value.targetPage
 	return skipFirstPageOnNextSong.value ? base + 1 : base
 })
 
@@ -314,13 +327,14 @@ const setlistStripSongs = computed<SetlistStripSong[]>(() => {
 		const file = pickPrimaryFile(song, isSingleSongMode.value && idx === 0 ? props.preferredFileId : undefined)
 		const filePath = buildVersionedPath(file)
 		const title = song?.title || item.songTitle || t('sheetmusic', 'Unknown Song')
-		const pageCount = file?.pageCount && file.pageCount > 0 ? file.pageCount : 1
+		const bounds = resolveItemBounds(item, song, file)
+		const pageCount = bounds.boundedPageCount ?? (file?.pageCount && file.pageCount > 0 ? file.pageCount : 1)
 		return {
 			itemIndex: idx,
 			title,
 			bookmarkName: item.bookmarkName,
 			filePath,
-			pageOrder: file?.pageOrder ?? null,
+			pageOrder: bounds.pageOrder,
 			pageCount,
 		}
 	})
@@ -333,10 +347,9 @@ const nextSong = computed<Song | null>(() => {
 })
 const nextFile = computed(() => pickPrimaryFile(nextSong.value))
 const nextFilePath = computed(() => buildVersionedPath(nextFile.value))
-const nextPageOrder = computed(() => nextFile.value?.pageOrder ?? null)
-const nextTargetPage = computed(() => {
-	return nextItem.value?.pageNum && nextItem.value.pageNum >= 1 ? nextItem.value.pageNum : 1
-})
+const nextItemBounds = computed(() => resolveItemBounds(nextItem.value, nextSong.value, nextFile.value))
+const nextPageOrder = computed(() => nextItemBounds.value.pageOrder)
+const nextTargetPage = computed(() => nextItemBounds.value.targetPage)
 
 const effectiveLayout = computed(() => {
 	if (layoutChoice.value !== 'auto') return layoutChoice.value

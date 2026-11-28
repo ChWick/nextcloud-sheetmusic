@@ -263,4 +263,70 @@ test.describe('Performance Mode background preloading and flicker-free song tran
 		await expect(footer).toContainText('Page 1–2 of 3')
 		await expect(dialog).toContainText('SONG A PAGE 1 ANNOTATION')
 	})
+
+	test('supports multiple bookmarks on the same page (#32) and bounded bookmark setlist flow (#33)', async ({ page }) => {
+		await setupMockApi(page)
+
+		const doc = await PDFDocument.create()
+		for (let i = 0; i < 6; i++) {
+			doc.addPage([600, 800])
+		}
+		const sixPageBytes = Buffer.from(await doc.save())
+
+		const setlist = {
+			id: 79,
+			libraryId: 1,
+			name: 'Movements Concert',
+			itemCount: 3,
+			items: [
+				{ id: 1, setlistId: 79, songId: 5, bookmarkId: 101, position: 0, songTitle: 'Symphony No. 5', bookmarkName: 'Prelude', pageNum: 1, endPage: 1 },
+				{ id: 2, setlistId: 79, songId: 5, bookmarkId: 102, position: 1, songTitle: 'Symphony No. 5', bookmarkName: 'Fugue', pageNum: 1, endPage: 2 },
+				{ id: 3, setlistId: 79, songId: 5, bookmarkId: 103, position: 2, songTitle: 'Symphony No. 5', bookmarkName: 'Andante', pageNum: 4, endPage: 5 },
+			],
+		}
+
+		await page.route('**/api/libraries/*/setlists', (route) => fulfillOcs(route, [setlist]))
+		await page.route('**/api/libraries/*/setlists/**', async (route) => {
+			if (route.request().url().endsWith('/files')) {
+				return fulfillOcs(route, [])
+			}
+			return fulfillOcs(route, setlist)
+		})
+		await page.route('**/api/songs/*/annotations**', (route) => fulfillOcs(route, []))
+		await page.route('**/Beethoven*', (route) => route.fulfill({ status: 200, contentType: 'application/pdf', body: sixPageBytes }))
+
+		await page.goto('/#/library/1/setlists')
+		await page.getByRole('button', { name: 'Play Setlist' }).click()
+
+		const dialog = page.getByRole('dialog', { name: 'Movements Concert' })
+		await expect(dialog).toBeVisible()
+
+		// Switch to Single page layout
+		const layoutSelect = dialog.locator('[data-test="performance-layout-select"]')
+		await layoutSelect.locator('.vs__dropdown-toggle').click()
+		await page.getByRole('option', { name: 'Single page' }).click()
+
+		const footer = dialog.locator('footer')
+		// Item 1: Prelude (pp. 1-1 -> 1 page)
+		await expect(dialog).toContainText('Prelude')
+		await expect(footer).toContainText('Page 1 of 1')
+
+		// Advancing moves to Item 2: Fugue (also starts on page 1, pp. 1-2 -> 2 pages)
+		await page.keyboard.press('ArrowRight')
+		await expect(dialog).toContainText('Fugue')
+		await expect(footer).toContainText('Page 1 of 2')
+
+		await page.keyboard.press('ArrowRight')
+		await expect(footer).toContainText('Page 2 of 2')
+
+		// Advancing past Fugue's endPage (2) automatically jumps to Item 3: Andante (pp. 4-5 -> 2 pages)
+		await page.keyboard.press('ArrowRight')
+		await expect(dialog).toContainText('Andante')
+		await expect(footer).toContainText('Page 1 of 2')
+
+		// Stepping back from Andante lands on Fugue's last page (Page 2 of 2)
+		await page.keyboard.press('ArrowLeft')
+		await expect(dialog).toContainText('Fugue')
+		await expect(footer).toContainText('Page 2 of 2')
+	})
 })

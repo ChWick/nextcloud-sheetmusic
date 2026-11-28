@@ -98,7 +98,9 @@
                   :title="t('sheetmusic', 'Bookmark page {page}', { page: item.pageNum ?? 1 }, { escape: false })">
                   <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
                   {{ item.bookmarkName }}
-                  <span v-if="item.pageNum" :class="$style.bookmarkPage"> (p. {{ item.pageNum }})</span>
+                  <span v-if="item.pageNum" :class="$style.bookmarkPage">
+                    ({{ item.endPage && item.endPage > item.pageNum ? `pp. ${item.pageNum}–${item.endPage}` : `p. ${item.pageNum}` }})
+                  </span>
                 </span>
               </div>
             </td>

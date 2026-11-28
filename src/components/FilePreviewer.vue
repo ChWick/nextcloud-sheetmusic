@@ -1041,8 +1041,18 @@ watch(
 		if (loadedPdf.value && renderedFilePath === props.filePath) {
 			const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
 			totalPages.value = ordered.length
-			currentPage.value = 1
-			doubleSpread.value = getInitialDoubleSpread(effectiveDoubleTotalPages.value)
+			currentPage.value = props.startAtEnd && totalPages.value > 0
+				? totalPages.value
+				: (props.targetPage && props.targetPage >= 1 ? Math.min(props.targetPage, totalPages.value) : 1)
+			if (props.startAtEnd) {
+				doubleSpread.value = getLastDoubleSpread(effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+			} else if (props.interleavedStart) {
+				doubleSpread.value = getInterleavedStartDoubleSpread(effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+			} else {
+				doubleSpread.value = effectiveDoubleTotalPages.value > 1
+					? getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+					: getInitialDoubleSpread(effectiveDoubleTotalPages.value)
+			}
 			renderCurrentView()
 		}
 	},

@@ -229,3 +229,55 @@ export function generatePresetOrder(preset: 'all' | 'reverse' | 'repeat', totalP
 		}
 	}
 }
+
+export interface BookmarkPageBoundsResult {
+	pageOrder: string | null
+	targetPage: number
+	boundedPageCount: number | null
+}
+
+/**
+ * Resolves the effective page order and starting logical page for a setlist item.
+ * When a bounded bookmark (`startPage`..`endPage`) is present, restricts the page order
+ * to that range so performance mode stops at `endPage` and advances to the next item.
+ *
+ * @param options Bookmark and base page-order parameters
+ * @param options.basePageOrder Existing custom page order on the song file, if any
+ * @param options.startPage Bookmark start page (1-based)
+ * @param options.endPage Bookmark end page (1-based, inclusive)
+ */
+export function resolveBookmarkPageBounds(options: {
+	basePageOrder?: string | null
+	startPage?: number | null
+	endPage?: number | null
+}): BookmarkPageBoundsResult {
+	const start = options.startPage && options.startPage >= 1 ? Math.floor(options.startPage) : 1
+	const end = options.endPage && options.endPage >= start ? Math.floor(options.endPage) : null
+	const base = options.basePageOrder?.trim() || null
+
+	if (end === null) {
+		return {
+			pageOrder: base,
+			targetPage: start,
+			boundedPageCount: null,
+		}
+	}
+
+	if (base) {
+		const parsed = parsePageOrder(base, end)
+		const filtered = parsed.filter((p) => p >= start && p <= end)
+		if (filtered.length > 0) {
+			return {
+				pageOrder: formatPageOrder(filtered),
+				targetPage: 1,
+				boundedPageCount: filtered.length,
+			}
+		}
+	}
+
+	return {
+		pageOrder: start === end ? `${start}` : `${start}-${end}`,
+		targetPage: 1,
+		boundedPageCount: end - start + 1,
+	}
+}

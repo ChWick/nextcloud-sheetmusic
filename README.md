@@ -73,11 +73,19 @@ Managing digital sheet music across multiple devices, band members, or ensembles
 - **Taxonomy Management**: Dedicated management views for Composers, Artists, Books, Collections, Genres, and Keys with duplicate entity merging.
 - **Multi-File Song Support**: Attach multiple scores, parts, lead sheets, or audio tracks to a single song with staged change staging.
 
-### 📄 Full-Screen Score Viewer
-- **Embedded PDF Score Viewer**: High-performance canvas-rendered viewer optimized for fast page flipping, supporting continuous scroll, single-page, and two-page side-by-side layouts.
+### 📄 Score Viewer & Annotations
+- **Embedded Score & Document Viewer**: High-performance canvas-rendered PDF viewer supporting continuous scroll, single-page, and two-page side-by-side layouts, plus built-in `.docx` and `.xlsx` document preview and one-click external viewer launch.
 - **Musician Page-Turning Modes**: Choose between **Half-page** (`1/2 → 3/2 → 3/4`), **1-page step** (`1/2 → 2/3 → 3/4`), and **2-page jump** (`1/2 → 3/4`) in two-page view.
-- **PDF Bookmarks & Movements Bar**: Quickly jump between score bookmarks and song movements.
-- **External Viewer Option**: One-click opening into your browser's native viewer or desktop PDF application.
+- **Full Annotation Studio & Layers**: Freehand pen drawing, behind-the-notes highlighter blending (`multiply`) with straight-line snapping (`Shift`), text boxes, musical stamps, shapes, and clickable jump links with a floating return chip. Organize markings across toggleable annotation layers and draw directly with a stylus in Performance Mode.
+- **PDF Bookmarks & Bounded Movements**: Define multiple bookmarks per page and bounded movement ranges (`pageNum`–`endPage`) for instant jumping and clean setlist playback.
+
+### 🎭 Performance Mode, Stage Control & Practice Tools
+- **Fullscreen Performance Viewer**: Launch gig mode from any song or setlist with responsive orientation layout (`Auto` single-page portrait / two-page landscape), screen wake lock, and background preloading of adjacent songs and annotations for flicker-free transitions.
+- **Interleaved Song Transitions**: Preview the first page of the next song alongside the last page of the current song in two-page mode while keeping page positions locked across turns.
+- **Customizable Tap Zones & Pedal Mapping**: Configure screen tap zones (`Left / Right`, `Top / Bottom`, `Wide Right`, or `Off`) and map up to 4 Bluetooth foot-pedal keys plus `Spacebar` and `Enter` to page turns, song jumps, auto-scroll, metronome, night mode, or annotations.
+- **Concert Mode & Score Appearance**: Lock accidental HUD taps with hold-to-unlock Concert Mode, adjust Night / Sepia / Brightness filters, and enable tight on-the-fly margin cropping.
+- **Auto-Scroll**: Smooth continuous scrolling with configurable speed, start countdown, Spacebar/tap pause-resume, and automatic speed calibration from song duration.
+- **Built-in Practice Tools**: Integrated **Metronome** (tap tempo, time signatures, accented beat, visual flash, song-tempo sync), **Chromatic Pitch Pipe**, and **Browser Microphone Tuner**, available both in Performance Mode and in the dedicated **Tools** view.
 
 ### 🛠️ In-Browser PDF Processing Tools
 No need to install desktop PDF editors—Sheet Music includes built-in tools tailored for musicians:
@@ -86,15 +94,16 @@ No need to install desktop PDF editors—Sheet Music includes built-in tools tai
 - **PDF Margin Cropping**: Crop whitespace margins interactively with visual guideline overlays to maximize score size on tablet and e-ink displays.
 - **PDF Split & Join**: Extract individual songs from multi-page anthologies or join separate movement PDFs into a single piece.
 - **Scan Enhancer**: Clean up scanned sheet music directly in the browser (contrast adjustment, grayscale conversion, adaptive binarization, deskewing) with an operation stack and undo/redo history.
-- **Bookmarks & Movement Outlines**: Add, rename, and reorganize PDF document bookmarks.
-- **File Version History**: Revert back to previous score revisions using Nextcloud's built-in versioning system.
+- **Bookmarks & Movement Outlines**: Add, rename, and reorganize PDF document bookmarks (including multiple movements starting on the same page and explicit start/end ranges).
+- **File Version History & Change Log**: Inspect song edit history, revert metadata changes, and restore previous score revisions using Nextcloud's built-in versioning system.
 - **Trash Bin Protection**: Deleted songs and associated files move to the Nextcloud Trash Bin where they can be restored safely.
 
-### 📋 Setlist Management & Performance Mode
-- Create, rename, and manage setlists for rehearsals, gigs, and concerts.
-- Add whole songs or specific bookmarked sections to setlists.
-- Drag-and-drop reordering with persistent sorting modes.
-- **Setlist Performance Viewer**: Launch fullscreen gig mode directly from any setlist with responsive tablet/orientation layout (`Auto` single-page portrait / two-page landscape), touch tap-zones & swipe, keyboard/Bluetooth pedal page turning, automatic bookmark jumping, next-song preloading, and screen wake lock.
+### 📋 Setlist Management, Timing & Offline Mode
+- Create, rename, and manage setlists for rehearsals, gigs, and concerts with drag-and-drop reordering, supplemental files/notes, and persistent sorting modes.
+- Add whole songs or specific bounded bookmarks (movements) to setlists—Performance Mode automatically stops at a movement's `endPage` and advances to the next setlist item.
+- **Setlist Timing, Breaks & Stage Clock**: Track per-song durations, insert intermission break markers with segment subtotals, and monitor live wall-clock time, remaining setlist duration, estimated finish time, or a countdown timer on stage.
+- **Offline Setlists & PWA**: Cache entire setlists and their scores locally in the browser for reliable offline playback on stage.
+- **Library & Sub-Library Sharing**: Share libraries or instrument-specific sub-libraries with other Nextcloud users or via public links.
 
 ### 🩺 Library Health & Maintenance Automation
 - **Sync File Paths & Metadata**: Automatically organize physical files on disk according to customizable naming rules (`Composer/Title.pdf`), embed song metadata into standard PDF document properties (Title, Author, Subject, Keywords), and update MobileSheets hash codes.
